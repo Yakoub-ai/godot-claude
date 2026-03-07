@@ -1,63 +1,127 @@
 # Per-Project Setup Guide
 
-How to configure a Godot project to use the godot-claude tools.
+How to configure a Godot project to use all three MCPs with the godot-dev skill.
 
-## 1. MCP Servers
+---
 
-Copy `.mcp.json.example` from the root of this repo into your Godot project root as `.mcp.json`:
+## Architecture Overview
+
+| MCP | Scope | Config location |
+|-----|-------|----------------|
+| Godot MCP Pro | Per-project | `.mcp.json` in project root |
+| PixelLab | Per-project | `.mcp.json` in project root |
+| Godot Docs MCP | Global (all projects) | `~/.claude.json` via `install.sh` |
+
+---
+
+## Step 1 — Run the installer (one time per machine)
 
 ```bash
-cp /path/to/godot-claude/.mcp.json.example /path/to/your-project/.mcp.json
+cd /path/to/godot-claude
+./install.sh
 ```
 
-Set the PixelLab API key (get one from pixellab.ai):
+This installs:
+- The `godot-dev` Claude skill to `~/.claude/skills/godot-dev/`
+- Builds the `godot-mcp-docs:local` Docker image
+- Registers `godot-mcp-docs` globally in `~/.claude.json`
+
+---
+
+## Step 2 — Set up Godot MCP Pro
+
+Godot MCP Pro is a Node.js server that connects to a running Godot editor.
+
+**Build the server:**
+```bash
+git clone <godot-mcp-pro-source> ~/server  # or wherever you keep it
+cd ~/server
+npm install
+npm run build
+# Produces: ~/server/build/index.js
+```
+
+**Install the Godot plugin:**
+The Godot editor needs the MCP Pro plugin installed and enabled. The editor must be
+running for any `mcp__godot-mcp-pro__*` tools to work.
+
+---
+
+## Step 3 — Copy `.mcp.json` to your project
 
 ```bash
-export PIXELLAB_API_KEY=your_key_here
-# Or add to ~/.bashrc / ~/.zshrc for persistence
+cp /path/to/godot-claude/.mcp.json.example /path/to/your-godot-project/.mcp.json
 ```
 
-The Godot MCP Pro plugin must be installed and the Godot editor must be running for
-engine-integration tools to work. Install the plugin from the Godot Asset Library or
-follow the setup guide at the Godot MCP Pro repo.
+Edit `.mcp.json`:
+1. Replace `PATH_TO_GODOT_MCP_PRO` with the actual path to your server build
+2. Replace `YOUR_PIXELLAB_API_KEY` with your key from [pixellab.ai](https://pixellab.ai)
 
-## 2. CLAUDE.md — Mandatory skill invocation
+**Example for this machine:**
+```json
+{
+  "mcpServers": {
+    "godot-mcp-pro": {
+      "command": "node",
+      "args": ["/home/george/server/build/index.js"],
+      "env": {
+        "GODOT_MCP_PORT": "6505"
+      }
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_KEY_HERE"
+      }
+    }
+  }
+}
+```
 
-Add this block to the top of your project's `CLAUDE.md` (create one if it doesn't exist):
+---
+
+## Step 4 — Add mandatory CLAUDE.md block
+
+Create or edit `CLAUDE.md` in your Godot project root. Add at the top:
 
 ```markdown
 ## MANDATORY: Always Use godot-dev Skill
 This is a Godot project. Before ANY work — code changes, scene edits, debugging,
 asset generation, documentation lookup — invoke the `godot-dev` skill. No exceptions.
-```
 
-Then add a game overview section so Claude has immediate context:
-
-```markdown
 ## Game Overview
-[Engine version, genre, core loop in 2-3 sentences. Key constraint: no gravity/platformer,
-or 8-dir movement, or whatever is non-obvious.]
+[Engine version, genre, core loop in 2-3 sentences.]
 ```
 
-## 3. Per-Project Reference File
+---
 
-Create a project-specific reference in the skill's references directory:
+## Step 5 — Create a per-project reference file (recommended)
 
+Copy the template and fill it in:
 ```bash
 cp /path/to/godot-claude/skill/references/project-template.md \
    /path/to/godot-claude/skill/references/your-project.md
 ```
 
-Fill in the template, then run `install.sh` to deploy it to `~/.claude/skills/godot-dev/references/`.
+Then re-run `install.sh` to deploy it to `~/.claude/skills/godot-dev/references/`.
 
-The reference file is loaded by Claude when it invokes the `godot-dev` skill, giving it
-project-specific context (scene paths, conventions, system architecture) without you
-needing to re-explain every session.
+Claude loads this file when it invokes the `godot-dev` skill, giving it project-specific
+context (scene paths, conventions, system architecture) every session automatically.
 
-## 4. Verify Everything Works
+---
 
-In a Claude Code session inside your project, type a Godot-related message. Claude should:
+## Verify Everything Works
+
+Open Claude Code in your Godot project directory. Send any Godot-related message.
+Claude should:
+
 1. Automatically invoke the `godot-dev` skill
-2. Have access to `mcp__godot-mcp-pro__*`, `mcp__godot-mcp-docs__*`, and `mcp__pixellab__*` tools
+2. Have `mcp__godot-mcp-pro__*` tools available (requires Godot editor open)
+3. Have `mcp__godot-mcp-docs__*` tools available (Docker-based, no editor needed)
+4. Have `mcp__pixellab__*` tools available (HTTP, always available)
 
-If MCP tools are missing, check that `.mcp.json` is in the project root and the Godot editor is open.
+If a tool category is missing, check:
+- **godot-mcp-pro missing**: Is the Godot editor running? Is `.mcp.json` in the project root with the correct path?
+- **godot-mcp-docs missing**: Did `install.sh` complete successfully? Is Docker running?
+- **pixellab missing**: Is `.mcp.json` in the project root? Is the API key correct?
