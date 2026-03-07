@@ -30,20 +30,31 @@ This installs:
 
 ## Step 2 — Set up Godot MCP Pro
 
-Godot MCP Pro is a Node.js server that connects to a running Godot editor.
+Godot MCP Pro is a proprietary Node.js server (purchase at godot-mcp.abyo.net).
+It connects to a running Godot editor via WebSocket. No auth required — localhost only.
 
-**Build the server:**
+See `docs/godot-mcp-pro-setup.md` for the full guide. Quick version:
+
+**Build the server once (all projects share it):**
 ```bash
-git clone <godot-mcp-pro-source> ~/server  # or wherever you keep it
-cd ~/server
+cd /path/to/godot-mcp-pro-v1.5.0/server
 npm install
 npm run build
-# Produces: ~/server/build/index.js
+# Produces: server/build/index.js
 ```
 
-**Install the Godot plugin:**
-The Godot editor needs the MCP Pro plugin installed and enabled. The editor must be
-running for any `mcp__godot-mcp-pro__*` tools to work.
+Or let `install.sh` handle it:
+```bash
+GODOT_MCP_PRO_SOURCE=/path/to/godot-mcp-pro-v1.5.0 ./install.sh
+```
+
+**Install the Godot plugin (per project):**
+```bash
+cp -r /path/to/godot-mcp-pro-v1.5.0/addons/godot_mcp /path/to/your-project/addons/
+```
+Then enable in Godot: **Project → Project Settings → Plugins → Godot MCP Pro → Enable**
+
+The editor must be running with the plugin enabled for any `mcp__godot-mcp-pro__*` tools to work.
 
 ---
 

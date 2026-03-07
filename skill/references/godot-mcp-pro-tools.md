@@ -1,6 +1,8 @@
 # Godot MCP Pro — Full Tool Catalog
 
-172 tools for direct Godot engine integration. Organized by domain.
+162 tools for direct Godot engine integration. Organized by domain.
+Connection: Claude Code ←stdio/MCP→ Node.js Server ←WebSocket:6505→ Godot Editor Plugin
+Auth: none required. Godot editor must be open with plugin enabled.
 
 ---
 

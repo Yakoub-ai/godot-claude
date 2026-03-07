@@ -1,6 +1,6 @@
 ---
 name: godot-dev
-description: Comprehensive Godot game development with three MCP server integrations. ALWAYS use this skill when the working directory contains a project.godot file OR when the CLAUDE.md identifies the project as a Godot game. Also triggers whenever the user mentions Godot, GDScript, game development, CharacterBody2D, scene tree, sprites, platformer, roguelite, enemies, weapons, waves, tilemaps, shaders, particles, or any Godot class name. Covers scene creation, node ops, scripting, physics, animation, audio, UI, navigation, particles, shaders, tilemaps, and runtime testing via Godot MCP Pro (172 tools). Also triggers for asset generation with PixelLab (pixel art characters, tilesets, animations) and Godot documentation lookup. Full pipeline: Godot docs → asset creation → engine integration.
+description: Comprehensive Godot game development with three MCP server integrations. ALWAYS use this skill when the working directory contains a project.godot file OR when the CLAUDE.md identifies the project as a Godot game. Also triggers whenever the user mentions Godot, GDScript, game development, CharacterBody2D, scene tree, sprites, platformer, roguelite, enemies, weapons, waves, tilemaps, shaders, particles, or any Godot class name. Covers scene creation, node ops, scripting, physics, animation, audio, UI, navigation, particles, shaders, tilemaps, and runtime testing via Godot MCP Pro (162 tools). Also triggers for asset generation with PixelLab (pixel art characters, tilesets, animations) and Godot documentation lookup. Full pipeline: Godot docs → asset creation → engine integration.
 ---
 
 # Godot Development — Triple MCP Integration
@@ -9,7 +9,7 @@ This skill integrates three MCP servers for comprehensive Godot game development
 
 | Server | Purpose | Tools |
 |--------|---------|-------|
-| **Godot MCP Pro** | Direct engine integration — scene editing, node ops, scripting, runtime testing | 172 tools |
+| **Godot MCP Pro** | Direct engine integration — scene editing, node ops, scripting, runtime testing | 162 tools |
 | **Godot Docs MCP** | Official documentation lookup — class refs, tutorials, best practices | 1,582 doc files |
 | **PixelLab** | AI pixel art generation — characters, animations, tilesets, props | Async pipeline |
 
