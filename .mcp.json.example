@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "godot-mcp-pro": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/godot-mcp-pro"]
+    },
+    "godot-mcp-docs": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/godot-mcp-docs"]
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
