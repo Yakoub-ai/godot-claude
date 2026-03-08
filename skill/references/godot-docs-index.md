@@ -126,6 +126,16 @@ tutorials/best_practices/scene_organization.md
 tutorials/best_practices/godot_interfaces.md
 ```
 
+### Performance
+```
+tutorials/performance/           — Performance optimization guides
+tutorials/performance/using_multimesh.md
+tutorials/performance/cpu_optimization.md
+tutorials/performance/gpu_optimization.md
+tutorials/performance/threads/using_multiple_threads.md
+tutorials/3d/global_illumination/using_sdfgi.md
+```
+
 ## When to Look Up Docs
 
 - **Unfamiliar class**: Look up the class reference before using it

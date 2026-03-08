@@ -77,8 +77,23 @@ assets/{category}/{name}/{animation}/frame_NNN.png
 
 ---
 
+## Performance Budget
+
+- Target FPS: [60]
+- Max nodes per scene: [e.g. 1000]
+- Max concurrent enemies: [e.g. 200]
+- Max concurrent projectiles: [e.g. 100]
+- Draw call budget: [e.g. 100]
+- Object pooling: [list pooled types — enemies, bullets, XP gems, etc.]
+- Manager pattern: [list managed types — bullets, particles, etc.]
+
+See `references/performance-patterns.md` for optimization code patterns.
+
+---
+
 ## Conventions
 
+- **Static typing on everything** — `var speed: float`, `func foo() -> void:`, `Array[Type]`
 - `class_name` on all scripts
 - `@export` for tunable values
 - `@onready` for node refs
