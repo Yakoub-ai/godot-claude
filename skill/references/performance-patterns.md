@@ -84,6 +84,19 @@ func activate() -> void:
     set_physics_process(true)
 ```
 
+### Staggered Updates
+Distribute N entities across M frames so not all update the same frame:
+```gdscript
+const STAGGER_FRAMES: int = 3  # update each enemy every 3rd frame
+
+func _physics_process(delta: float) -> void:
+    var frame: int = Engine.get_physics_frames()
+    for i: int in range(enemies.size()):
+        if i % STAGGER_FRAMES == frame % STAGGER_FRAMES:
+            enemies[i].update_ai(delta * STAGGER_FRAMES)
+```
+Use for AI decisions, pathfinding recalculation, and targeting — anything that doesn't need per-frame precision.
+
 ---
 
 ## Manager Pattern — Centralized Update Loops
