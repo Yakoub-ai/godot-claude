@@ -1,6 +1,6 @@
 ---
 name: godot-dev
-description: Comprehensive Godot game development with three MCP server integrations. ALWAYS use this skill when the working directory contains a project.godot file OR when the CLAUDE.md identifies the project as a Godot game. Also triggers whenever the user mentions Godot, GDScript, game development, CharacterBody2D, scene tree, sprites, platformer, roguelite, enemies, weapons, waves, tilemaps, shaders, particles, or any Godot class name. Covers scene creation, node ops, scripting, physics, animation, audio, UI, navigation, particles, shaders, tilemaps, and runtime testing via Godot MCP Pro (162 tools). Also triggers for asset generation with PixelLab (pixel art characters, tilesets, animations) and Godot documentation lookup. Full pipeline: Godot docs → asset creation → engine integration.
+description: Comprehensive Godot game development with three MCP server integrations. ALWAYS use this skill when the working directory contains a project.godot file OR when the CLAUDE.md identifies the project as a Godot game. Also triggers whenever the user mentions Godot, GDScript, game development, CharacterBody2D, scene tree, sprites, platformer, roguelite, enemies, weapons, waves, tilemaps, shaders, particles, performance, optimization, or any Godot class name. Covers scene creation, node ops, scripting, physics, animation, audio, UI, navigation, particles, shaders, tilemaps, runtime testing, and performance optimization via Godot MCP Pro (162 tools). Also triggers for asset generation with PixelLab (pixel art characters, tilesets, animations) and Godot documentation lookup. Includes interactive game creation via /godot-dev:start — build entire games from a Game Design Document. Full pipeline: GDD → Godot docs → asset creation → engine integration → performance profiling.
 ---
 
 # Godot Development — Triple MCP Integration
@@ -32,7 +32,12 @@ Need pixel art assets?
 
 Check `references/` for project-specific files. If the current project matches one (e.g., `stress-killer.md`), read it first — project conventions override general patterns.
 
-For platformer-specific patterns (movement physics, weapon systems, enemy AI), see `references/platformer-patterns.md`.
+Key reference files:
+- `references/platformer-patterns.md` — movement physics, weapon systems, enemy AI
+- `references/performance-patterns.md` — static typing, manager pattern, object pooling, MultiMesh, profiling
+- `references/gdd-workflow.md` — interactive game creation flow (`/godot-dev:start`)
+- `references/pixellab-workflows.md` — AI pixel art generation pipeline
+- `references/project-template.md` — template for new project reference files
 
 ---
 
@@ -197,6 +202,34 @@ Godot MCP Pro: get_game_screenshot → compare_screenshots
 Godot MCP Pro: get_performance_monitors (check FPS, draw calls)
 ```
 
+### 6. GDD-to-Game Pipeline
+```
+/godot-dev:start → Interactive Q&A (9 stages) → Generate project reference .md
+  ↓
+Godot MCP Pro: create project structure (scenes/, scripts/, assets/)
+  ↓
+PixelLab: generate characters, enemies, tilesets per asset plan
+  ↓
+Godot MCP Pro: create scenes, build node trees, attach scripts
+  ↓
+Godot MCP Pro: play_scene → test → get_performance_monitors → iterate
+```
+See `references/gdd-workflow.md` for the interactive stage-by-stage flow.
+
+### 7. Performance Profiling Loop
+```
+Godot MCP Pro: get_performance_monitors → identify bottleneck type
+  ↓
+Godot MCP Pro: run_stress_test → measure under load
+  ↓
+Godot MCP Pro: analyze_scene_complexity → check node counts
+  ↓
+Apply fix: manager pattern / pooling / MultiMesh / static typing
+  ↓
+Godot MCP Pro: get_performance_monitors → verify improvement
+```
+See `references/performance-patterns.md` for optimization code patterns.
+
 ---
 
 ## Godot Best Practices
@@ -224,6 +257,7 @@ Godot MCP Pro: get_performance_monitors (check FPS, draw calls)
 - Connect in `_ready()` or via the editor
 
 ### Code Style
+- **Static typing on everything** — `var speed: float = 200.0`, `func _process(delta: float) -> void:`, `Array[BaseEnemy]`, return types on all functions. Produces faster bytecode in release builds.
 - `class_name` on all scripts
 - `@export` for editor-tunable parameters
 - `@onready` with `$NodeName` for node references
@@ -240,6 +274,97 @@ Godot MCP Pro: get_performance_monitors (check FPS, draw calls)
 - Texture filter: Nearest (no smoothing) — set in project settings
 - Stretch mode: viewport for integer scaling
 - East-facing sprites, `flip_h` for west
+
+---
+
+## Performance & Optimization
+
+**Rule**: Always write optimized code from the start. Don't optimize later — write it right the first time.
+
+See `references/performance-patterns.md` for complete code examples.
+
+### Static Typing (Mandatory)
+Every variable, parameter, return type, and array must be typed:
+```gdscript
+var speed: float = 200.0
+var enemies: Array[BaseEnemy] = []
+func get_nearest(pos: Vector2) -> BaseEnemy:
+```
+This produces faster bytecode in release builds — especially in hot loops.
+
+### Process Function Guidelines
+- `_physics_process()` — movement and physics only
+- `_process()` — visual updates, use sparingly
+- **Timer nodes or cooldowns** for periodic checks (AI targeting, raycasting)
+- **Signals** for event-driven updates (zero per-frame cost)
+- **Never** put pathfinding, spatial queries, or heavy computation in per-frame callbacks
+- Call `set_process(false)` / `set_physics_process(false)` on inactive entities
+
+### Manager Pattern
+For 50+ similar objects (bullets, XP gems, particles), use a single Manager node with a centralized update loop instead of individual `_process()` calls on each object:
+```
+BulletManager._physics_process() → iterates active_bullets array → updates positions
+```
+
+### Object Pooling
+Pre-instantiate objects and recycle them — avoid `instantiate()` / `queue_free()` in gameplay loops. See `enemy_pool.gd` pattern.
+
+### Node Count Management
+- Keep scenes under 1,000 nodes (use `analyze_scene_complexity` MCP tool to check)
+- Flatten unnecessary container nodes
+- Use `VisibleOnScreenNotifier2D` to disable off-screen processing
+
+### MultiMeshInstance2D
+For 100+ identical visual elements (grass, debris, background decorations), use MultiMesh — single draw call vs. N draw calls.
+
+### Rendering (2D)
+- Combine sprites into texture atlases to reduce draw calls
+- Use `CanvasGroup` to batch draw calls for grouped CanvasItems
+- Minimize z-index sorting by grouping similar layers
+- For 3D: enable Occlusion Culling, use SDFGI for global illumination, apply LOD on meshes
+
+### Common Pitfalls to Avoid
+- **Excessive nodes** — too many nodes in a scene tree kills performance
+- **Physics overuse** — don't use RigidBody/Area2D for things that don't need physics
+- **Unoptimized loops** — avoid heavy calculations in `_process()`
+- **Dynamic typing in hot paths** — always use static types in frequently-called code
+- **String operations per frame** — cache string results, don't format strings in `_process()`
+- **Repeated `load()` calls** — use `preload()` or cache in a Dictionary
+
+### Profiling Workflow
+Use MCP Pro tools to diagnose bottlenecks:
+1. `get_performance_monitors` — baseline FPS, draw calls, node count
+2. `analyze_scene_complexity` — audit node counts per scene
+3. `run_stress_test` — measure under load
+4. Identify bottleneck type (rendering / physics / script) and apply fix
+5. `get_performance_monitors` — verify improvement
+
+---
+
+## Interactive Game Creation — `/godot-dev:start`
+
+Run `/godot-dev:start` to begin an interactive game creation workflow. Claude asks questions across 9 stages to build a complete Game Design Document, then generates the project.
+
+### Stages
+1. **Game Concept** — genre, art style, camera, core loop
+2. **Technical Setup** — renderer, viewport, platform, FPS target
+3. **Entities & Characters** — playable characters, enemies, sprite specs
+4. **Levels & Scenes** — level structure, biomes, scene hierarchy
+5. **Core Systems** — combat, progression, spawning, UI, audio
+6. **Input Map** — action bindings with genre-appropriate defaults
+7. **Asset Generation Plan** — PixelLab task list compiled from entity specs
+8. **Performance Budget** — node limits, draw call targets, pooling requirements
+9. **Phase Plan** — ordered build phases with acceptance criteria
+
+After completion, Claude:
+- Writes a `references/{project-name}.md` project reference file
+- Scaffolds the project structure via Godot MCP Pro
+- Begins Phase 1 implementation
+- Applies performance patterns from `references/performance-patterns.md` throughout
+
+See `references/gdd-workflow.md` for the full stage-by-stage workflow details.
+
+User can say "use defaults" at any stage to skip ahead with genre-appropriate defaults.
 
 ---
 

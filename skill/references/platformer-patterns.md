@@ -239,3 +239,37 @@ if is_invincible:
 - Stretch mode: viewport
 - Texture filter: Nearest
 - Renderer: GL Compatibility
+
+---
+
+## Performance Notes
+
+### Weapon Targeting
+The `get_nearest_enemy()` function iterates all enemies — O(n). For 50+ enemies, use spatial partitioning (grid-based lookup). See `references/performance-patterns.md` for the `SpatialGrid` pattern.
+
+### Wave Spawning
+Use object pooling for enemies instead of `instantiate()` / `queue_free()` each wave. Pre-warm the pool with the maximum expected enemy count. See `references/performance-patterns.md` for the `ObjectPool` pattern.
+
+### Bullet/Projectile Management
+For auto-fire weapons generating many projectiles, use a centralized `BulletManager` with a single `_physics_process()` loop instead of per-bullet processing. See `references/performance-patterns.md` for the Manager pattern.
+
+### Animation
+- Cache animation names as `StringName` constants instead of passing strings each frame
+- Use `AnimatedSprite2D.play()` only when the animation changes, not every frame
+
+```gdscript
+# BAD — string allocation every frame
+func _process(delta: float) -> void:
+    sprite.play("idle")
+
+# GOOD — only play when animation changes
+var _current_anim: StringName = &""
+
+func _play_anim(anim: StringName) -> void:
+    if _current_anim != anim:
+        _current_anim = anim
+        sprite.play(anim)
+```
+
+### Static Typing
+All code examples in this file use static typing. When implementing these patterns, ensure every variable, parameter, and return type is explicitly typed for maximum performance in release builds.
