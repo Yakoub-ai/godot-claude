@@ -1,164 +1,270 @@
 #!/usr/bin/env bash
-# Install / update all godot-claude components:
-#   1. godot-dev Claude skill     → ~/.claude/skills/godot-dev/
-#   2. Godot MCP Pro server       → builds from source if GODOT_MCP_PRO_SOURCE is set
-#   3. godot-mcp-docs             → clones if needed, builds Docker image, registers globally
+# godot-claude installer for Linux/macOS
+# Installs Claude Code agent files into a Godot project root.
 #
-# Run this after pulling updates to the repo.
-#
-# Environment variable overrides:
-#   GODOT_MCP_PRO_SOURCE   path to godot-mcp-pro-v1.5.0/ dir (skips Pro build if unset)
-#   GODOT_MCP_DOCS_DIR     path to godot-mcp-docs repo       (default: ~/dev/godot-mcp-docs)
-#   GODOT_MCP_DOCS_REPO    git URL for godot-mcp-docs         (default: GitHub Nihilantropy)
-#   CLAUDE_JSON            path to ~/.claude.json              (default: ~/.claude.json)
+# Usage:
+#   ./install.sh                           # Interactive — prompts for path
+#   ./install.sh /path/to/godot-project    # Direct install
+#   ./install.sh --skip-mcp /path/to/proj  # Skip .mcp.json creation
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-SKILL_SRC="$REPO_DIR/skill"
-SKILL_DEST="${HOME}/.claude/skills/godot-dev"
-DOCS_MCP_DIR="${GODOT_MCP_DOCS_DIR:-$HOME/dev/godot-mcp-docs}"
-DOCS_MCP_REPO="${GODOT_MCP_DOCS_REPO:-https://github.com/Nihilantropy/godot-mcp-docs.git}"
-CLAUDE_JSON="${CLAUDE_JSON:-$HOME/.claude.json}"
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-# Auto-detect MCP Pro source at common location if not set
-if [ -z "${GODOT_MCP_PRO_SOURCE:-}" ]; then
-  DEFAULT_PRO="$HOME/godot-mcp/godot-mcp-pro-v1.5.0"
-  if [ -d "$DEFAULT_PRO/server" ]; then
-    GODOT_MCP_PRO_SOURCE="$DEFAULT_PRO"
-  fi
-fi
+step()  { echo -e "  ${GREEN}▸${NC} $1"; }
+warn()  { echo -e "  ${YELLOW}⚠${NC} $1"; }
+err()   { echo -e "  ${RED}✗${NC} $1"; }
+ok()    { echo -e "  ${GREEN}✓${NC} $1"; }
 
-echo "=== godot-claude installer ==="
+# Header
+echo ""
+echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}${CYAN}║   godot-claude — Claude Code Agent      ║${NC}"
+echo -e "${BOLD}${CYAN}║   for Godot 4.x Game Development        ║${NC}"
+echo -e "${BOLD}${CYAN}║                                          ║${NC}"
+echo -e "${BOLD}${CYAN}║   Compatible with: Claude Code (CLI)     ║${NC}"
+echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
-# ─── 1. Install godot-dev skill ─────────────────────────────────────────────
-echo "[1/3] Installing godot-dev skill..."
-mkdir -p "$SKILL_DEST/references"
-cp "$SKILL_SRC/SKILL.md" "$SKILL_DEST/SKILL.md"
-cp "$SKILL_SRC/references/"*.md "$SKILL_DEST/references/"
-echo "      ✓ Skill installed at $SKILL_DEST"
+# Parse args
+SKIP_MCP=false
+PROJECT_PATH=""
+for arg in "$@"; do
+    case $arg in
+        --skip-mcp) SKIP_MCP=true ;;
+        *)          PROJECT_PATH="$arg" ;;
+    esac
+done
 
-# ─── 2. Build Godot MCP Pro server ──────────────────────────────────────────
-echo ""
-echo "[2/3] Godot MCP Pro server..."
+# Open a native folder picker dialog, returns selected path via stdout
+open_folder_dialog() {
+    local title="Select Godot Project or Parent Directory"
+    local selected=""
 
-if [ -n "${GODOT_MCP_PRO_SOURCE:-}" ]; then
-  SERVER_SRC="$GODOT_MCP_PRO_SOURCE/server"
-  if [ ! -d "$SERVER_SRC" ]; then
-    echo "      ERROR: server/ not found inside GODOT_MCP_PRO_SOURCE=$GODOT_MCP_PRO_SOURCE"
-    exit 1
-  fi
-  echo "      Building from $SERVER_SRC ..."
-  (cd "$SERVER_SRC" && npm install --silent && npm run build --silent)
-  echo "      ✓ Built: $SERVER_SRC/build/index.js"
-  MCP_PRO_BUILT="$SERVER_SRC/build/index.js"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS — AppleScript
+        selected=$(osascript -e \
+            'tell app "System Events" to set f to choose folder with prompt "'"$title"'"' \
+            -e 'POSIX path of f' 2>/dev/null) || true
 
-  # Check if the addons plugin exists (needed per Godot project)
-  PLUGIN_SRC="$GODOT_MCP_PRO_SOURCE/addons/godot_mcp"
-  if [ -d "$PLUGIN_SRC" ]; then
-    echo "      ℹ  Plugin at: $PLUGIN_SRC"
-    echo "         Copy to each Godot project: cp -r $PLUGIN_SRC /your-project/addons/"
-    echo "         Then enable: Project → Project Settings → Plugins → Godot MCP Pro"
-  fi
-else
-  # Check if a pre-built server exists at common locations
-  CANDIDATE="$HOME/server/build/index.js"
-  if [ -f "$CANDIDATE" ]; then
-    echo "      ✓ Pre-built server found at $CANDIDATE"
-    MCP_PRO_BUILT="$CANDIDATE"
-  else
-    echo "      ✗ GODOT_MCP_PRO_SOURCE not set and no pre-built server found."
-    echo "        Set GODOT_MCP_PRO_SOURCE=/path/to/godot-mcp-pro-v1.5.0 to build automatically."
-    echo "        See docs/godot-mcp-pro-setup.md for manual instructions."
-    MCP_PRO_BUILT=""
-  fi
-fi
+    elif command -v zenity &>/dev/null; then
+        # Linux — GNOME / GTK
+        selected=$(zenity --file-selection --directory --title="$title" 2>/dev/null) || true
 
-# ─── 3. Build godot-mcp-docs Docker image + register globally ───────────────
-echo ""
-echo "[3/3] Setting up Godot Docs MCP (Docker)..."
+    elif command -v kdialog &>/dev/null; then
+        # Linux — KDE
+        selected=$(kdialog --getexistingdirectory "$HOME" --title "$title" 2>/dev/null) || true
 
-# Auto-clone if not present
-if [ ! -d "$DOCS_MCP_DIR" ]; then
-  echo "      godot-mcp-docs not found at $DOCS_MCP_DIR — cloning..."
-  git clone "$DOCS_MCP_REPO" "$DOCS_MCP_DIR"
-  echo "      ✓ Cloned to $DOCS_MCP_DIR"
-else
-  echo "      Found at $DOCS_MCP_DIR"
-fi
+    elif command -v yad &>/dev/null; then
+        # Linux — yad (another GTK dialog)
+        selected=$(yad --file --directory --title="$title" 2>/dev/null) || true
+    fi
 
-DOCKERFILE="$DOCS_MCP_DIR/deploy/Dockerfile"
-if [ ! -f "$DOCKERFILE" ]; then
-  echo "      ERROR: Dockerfile not found at $DOCKERFILE"
-  exit 1
-fi
-
-echo "      Building Docker image (takes a few minutes on first run)..."
-docker build -f "$DOCKERFILE" -t godot-mcp-docs:local "$DOCS_MCP_DIR"
-echo "      ✓ Docker image built: godot-mcp-docs:local"
-
-echo "      Registering globally in $CLAUDE_JSON..."
-
-if [ ! -f "$CLAUDE_JSON" ]; then
-  echo "      ERROR: $CLAUDE_JSON not found. Open Claude Code at least once first."
-  exit 1
-fi
-
-python3 - <<PYEOF
-import json, sys
-
-with open('$CLAUDE_JSON', 'r') as f:
-    data = json.load(f)
-
-servers = data.setdefault('mcpServers', {})
-target = {
-    'type': 'stdio',
-    'command': 'docker',
-    'args': ['run', '--rm', '-i', 'godot-mcp-docs:local']
+    echo "$selected"
 }
 
-if servers.get('godot-mcp-docs') == target:
-    print('      ✓ Already registered and up to date.')
-    sys.exit(0)
+# Resolve the chosen directory: direct project or pick from sub-projects
+resolve_project_path() {
+    local chosen="$1"
 
-servers['godot-mcp-docs'] = target
+    # Direct Godot project
+    if [ -f "$chosen/project.godot" ]; then
+        PROJECT_PATH="$chosen"
+        return 0
+    fi
 
-with open('$CLAUDE_JSON', 'w') as f:
-    json.dump(data, f, indent=2)
+    # Parent directory — find sub-projects
+    local -a subs=()
+    while IFS= read -r match; do
+        subs+=("$(dirname "$match")")
+    done < <(find "$chosen" -maxdepth 2 -name "project.godot" 2>/dev/null | sort)
 
-print('      ✓ Registered godot-mcp-docs globally.')
-PYEOF
+    if [ ${#subs[@]} -eq 0 ]; then
+        err "No project.godot found in: $chosen"
+        echo "  Select a Godot project folder or a parent containing one."
+        exit 1
+    fi
 
-# ─── Summary ─────────────────────────────────────────────────────────────────
-echo ""
-echo "=== Done ==="
-echo ""
-echo "Authentication summary:"
-echo "  Godot MCP Pro  : no auth required (localhost WebSocket)"
-echo "  Godot Docs MCP : no auth required (Docker, local)"
-echo "  PixelLab       : API key required → https://pixellab.ai"
-echo ""
-echo "Per-project steps still needed:"
-echo ""
-echo "  1. Copy .mcp.json.example to your Godot project:"
-echo "       cp $REPO_DIR/.mcp.json.example /path/to/your-project/.mcp.json"
+    if [ ${#subs[@]} -eq 1 ]; then
+        PROJECT_PATH="${subs[0]}"
+        return 0
+    fi
 
-if [ -n "${MCP_PRO_BUILT:-}" ]; then
-  echo "     Then set the server path in .mcp.json to:"
-  echo "       $MCP_PRO_BUILT"
+    # Multiple projects found — let user pick
+    echo ""
+    echo -e "  ${BOLD}Multiple Godot projects found:${NC}"
+    echo ""
+    for i in "${!subs[@]}"; do
+        echo -e "    ${CYAN}$((i+1))${NC}. ${subs[$i]}"
+    done
+    echo ""
+    read -rp "  Choose [1-${#subs[@]}]: " CHOICE
+    echo ""
+
+    if [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "${#subs[@]}" ]; then
+        PROJECT_PATH="${subs[$((CHOICE-1))]}"
+    else
+        err "Invalid choice."
+        exit 1
+    fi
+}
+
+# Get project path
+if [ -z "$PROJECT_PATH" ]; then
+    step "Opening folder picker…"
+    CHOSEN="$(open_folder_dialog)"
+
+    if [ -z "$CHOSEN" ]; then
+        # No GUI available or user cancelled — fall back to typed input
+        echo ""
+        warn "No folder picker available (or cancelled). Enter path manually."
+        echo ""
+        read -rp "  Project path: " CHOSEN
+        echo ""
+    fi
+
+    [ -z "$CHOSEN" ] && { err "No directory selected."; exit 1; }
+    resolve_project_path "$CHOSEN"
 fi
 
-echo ""
-echo "  2. Copy the Godot plugin to your project (per project):"
-if [ -n "${GODOT_MCP_PRO_SOURCE:-}" ]; then
-  echo "       cp -r $GODOT_MCP_PRO_SOURCE/addons/godot_mcp /path/to/your-project/addons/"
+# Expand ~ and resolve
+PROJECT_PATH="${PROJECT_PATH/#\~/$HOME}"
+PROJECT_PATH="$(cd "$PROJECT_PATH" 2>/dev/null && pwd)" || {
+    err "Path does not exist: $PROJECT_PATH"
+    exit 1
+}
+
+# Validate
+if [ ! -f "$PROJECT_PATH/project.godot" ]; then
+    err "No project.godot found in: $PROJECT_PATH"
+    echo "  Make sure you point to the root of a Godot 4.x project."
+    exit 1
+fi
+ok "Godot project found: $PROJECT_PATH"
+
+# Source files
+SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+AGENT_SRC="$SOURCE_DIR/agent"
+CLAUDE_SRC="$SOURCE_DIR/CLAUDE.md"
+
+if [ ! -d "$AGENT_SRC" ] || [ ! -f "$CLAUDE_SRC" ]; then
+    err "Missing agent/ or CLAUDE.md in godot-claude repository."
+    exit 1
+fi
+
+# Install CLAUDE.md
+if [ -f "$PROJECT_PATH/CLAUDE.md" ]; then
+    ok "CLAUDE.md already exists — skipped"
 else
-  echo "       cp -r /path/to/godot-mcp-pro-v1.5.0/addons/godot_mcp /path/to/your-project/addons/"
+    step "Installing CLAUDE.md → project root"
+    cp "$CLAUDE_SRC" "$PROJECT_PATH/CLAUDE.md"
+    ok "CLAUDE.md installed"
 fi
-echo "     Then enable: Project → Project Settings → Plugins → Godot MCP Pro"
+
+# Install .godot-claude/
+TARGET_DIR="$PROJECT_PATH/.godot-claude"
+step "Installing .godot-claude/ → project root"
+
+if [ -d "$TARGET_DIR" ]; then
+    # Preserve memory and session
+    TEMP_BACKUP=$(mktemp -d)
+    if [ -d "$TARGET_DIR/memory" ]; then
+        warn "Preserving existing memory data"
+        cp -r "$TARGET_DIR/memory" "$TEMP_BACKUP/memory"
+    fi
+    if [ -d "$TARGET_DIR/session" ]; then
+        warn "Preserving existing session data"
+        cp -r "$TARGET_DIR/session" "$TEMP_BACKUP/session"
+    fi
+
+    rm -rf "$TARGET_DIR"
+    cp -r "$AGENT_SRC" "$TARGET_DIR"
+
+    # Restore
+    if [ -d "$TEMP_BACKUP/memory" ]; then
+        rm -rf "$TARGET_DIR/memory"
+        cp -r "$TEMP_BACKUP/memory" "$TARGET_DIR/memory"
+    fi
+    if [ -d "$TEMP_BACKUP/session" ]; then
+        rm -rf "$TARGET_DIR/session"
+        cp -r "$TEMP_BACKUP/session" "$TARGET_DIR/session"
+    fi
+    rm -rf "$TEMP_BACKUP"
+else
+    cp -r "$AGENT_SRC" "$TARGET_DIR"
+fi
+ok ".godot-claude/ installed"
+
+# Create .mcp.json
+MCP_FILE="$PROJECT_PATH/.mcp.json"
+if [ "$SKIP_MCP" = false ] && [ ! -f "$MCP_FILE" ]; then
+    step "Creating .mcp.json"
+    cat > "$MCP_FILE" << 'EOF'
+{
+  "mcpServers": {
+    "godot-mcp-pro": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/godot-mcp-pro"]
+    },
+    "godot-mcp-docs": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/godot-mcp-docs"]
+    }
+  }
+}
+EOF
+    ok ".mcp.json created (PixelLab not included — add manually with API key)"
+elif [ -f "$MCP_FILE" ]; then
+    ok ".mcp.json already exists — skipped"
+fi
+
+# Update .gitignore
+GITIGNORE="$PROJECT_PATH/.gitignore"
+if [ -f "$GITIGNORE" ]; then
+    if ! grep -q ".godot-claude/memory/" "$GITIGNORE" 2>/dev/null; then
+        step "Updating .gitignore"
+        echo "" >> "$GITIGNORE"
+        echo "# godot-claude (personal data — do not commit)" >> "$GITIGNORE"
+        echo ".godot-claude/memory/" >> "$GITIGNORE"
+        echo ".godot-claude/session/" >> "$GITIGNORE"
+        ok ".gitignore updated"
+    fi
+else
+    step "Creating .gitignore"
+    cat > "$GITIGNORE" << 'EOF'
+# Godot
+.godot/
+
+# godot-claude (personal data — do not commit)
+.godot-claude/memory/
+.godot-claude/session/
+EOF
+    ok ".gitignore created"
+fi
+
+# Done
 echo ""
-echo "  3. Set PixelLab API key in .mcp.json"
+echo -e "${BOLD}${GREEN}══════════════════════════════════════════${NC}"
+echo -e "${BOLD}${GREEN}  ✓ Installation Complete${NC}"
+echo -e "${BOLD}${GREEN}══════════════════════════════════════════${NC}"
 echo ""
-echo "  4. Add mandatory CLAUDE.md block — see $REPO_DIR/docs/per-project-setup.md"
+echo -e "  ${BOLD}How to use:${NC}"
+echo -e "    ${CYAN}cd $PROJECT_PATH${NC}"
+echo -e "    ${CYAN}claude${NC}                         # Start Claude Code (Sonnet default)"
+echo ""
+echo -e "  ${BOLD}First commands:${NC}"
+echo -e "    ${CYAN}start new game${NC}                 # GDD workflow → full project scaffold"
+echo -e "    ${CYAN}continue${NC}                       # Resume last session"
+echo -e "    ${CYAN}status${NC}                         # Project state"
+echo ""
+echo -e "  ${BOLD}Model routing:${NC}"
+echo -e "    Architecture / GDD:    ${CYAN}claude --model opus${NC}"
+echo -e "    Development / Bugs:    ${CYAN}claude${NC}  (sonnet — default)"
+echo -e "    Documentation:         ${CYAN}claude --model haiku${NC}"
 echo ""
