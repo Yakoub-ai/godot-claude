@@ -36,7 +36,7 @@ Optional:
 ### 1. Clone this repo (anywhere)
 
 ```bash
-git clone https://github.com/YOUR_ORG/godot-claude.git
+git clone https://github.com/Yakoub-ai/godot-claude.git
 cd godot-claude
 ```
 
