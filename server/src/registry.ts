@@ -19,7 +19,7 @@ export interface ToolResult {
 export interface ToolDef {
   name: string;
   description: string;
-  schema: z.ZodObject<z.ZodRawShape>;
+  schema: z.ZodRawShape;
   handler: (
     params: Record<string, unknown>,
     godot: GodotConnection
@@ -72,7 +72,7 @@ export class CategoryRegistry {
       this.server.tool(
         tool.name,
         tool.description,
-        tool.schema.shape,
+        tool.schema,
         async (params) => {
           this.resetIdleTimer(name);
           try {
