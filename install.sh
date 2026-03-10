@@ -285,7 +285,7 @@ if [ "$SKIP_MCP" = false ] && [ ! -f "$MCP_FILE" ]; then
                 echo ""
                 if [ -z "$BUILD_DOCS" ] || [[ "$BUILD_DOCS" =~ ^[Yy] ]]; then
                     step "Building Godot documentation..."
-                    (cd "$DOCS_PATH" && python3 docs_converter/godot_docs_converter.py && tree docs/. > docs/docs_tree.txt) 2>&1
+                    (cd "$DOCS_PATH" && python3 docs_converter/godot_docs_converter.py && find docs -type f | sort > docs/docs_tree.txt) 2>&1
                     if [ $? -eq 0 ]; then
                         ok "Godot docs built successfully"
                         DOCS_READY=true
@@ -323,7 +323,7 @@ EOF
             ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs)"
         else
             ok ".mcp.json created (docs server configured but docs not built yet)"
-            warn "Run later: cd $DOCS_PATH && python3 docs_converter/godot_docs_converter.py && tree docs/. > docs/docs_tree.txt"
+            warn "Run later: cd $DOCS_PATH && python3 docs_converter/godot_docs_converter.py && find docs -type f | sort > docs/docs_tree.txt"
         fi
     else
         cat > "$MCP_FILE" << EOF

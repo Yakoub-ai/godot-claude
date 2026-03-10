@@ -34,13 +34,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# --- Colors (requires PowerShell 7+) ---
-$RST    = "`e[0m"
-$RED    = "`e[31m"
-$GREEN  = "`e[32m"
-$YELLOW = "`e[33m"
-$CYAN   = "`e[36m"
-$BOLD   = "`e[1m"
+# --- Colors (ANSI escape sequences — PS 7+ only, graceful fallback for 5.x) ---
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+    $RST    = "`e[0m"
+    $RED    = "`e[31m"
+    $GREEN  = "`e[32m"
+    $YELLOW = "`e[33m"
+    $CYAN   = "`e[36m"
+    $BOLD   = "`e[1m"
+} else {
+    $RST = ""; $RED = ""; $GREEN = ""; $YELLOW = ""; $CYAN = ""; $BOLD = ""
+}
 
 function Write-Header {
     Write-Host ""
@@ -305,7 +309,19 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
 
     # Docs server is bundled in the repo
     $docsPath = Join-Path $sourceDir "docs-server"
-    $docsAvailable = (Get-Command python3 -ErrorAction SilentlyContinue) -and (Test-Path (Join-Path $docsPath "main.py"))
+    # Detect Python 3 — Windows often has 'python' instead of 'python3'
+    $pythonCmd = $null
+    foreach ($candidate in @("python3", "python")) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $ver = & $candidate --version 2>&1
+            if ($ver -match 'Python 3') {
+                $pythonCmd = $candidate
+                break
+            }
+        }
+    }
+    $docsAvailable = ($null -ne $pythonCmd) -and (Test-Path (Join-Path $docsPath "main.py"))
     $docsReady = (Test-Path (Join-Path $docsPath "docs")) -and (Test-Path (Join-Path $docsPath "docs\docs_tree.txt"))
 
     if ($docsAvailable -and -not $docsReady) {
@@ -321,8 +337,9 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
                 Write-Step "Building Godot documentation..."
                 Push-Location $docsPath
                 try {
-                    python3 docs_converter/godot_docs_converter.py
-                    tree docs/. > docs/docs_tree.txt
+                    & $pythonCmd docs_converter/godot_docs_converter.py
+                    # Generate docs tree listing (cross-platform — no 'tree' dependency)
+                    Get-ChildItem -Path "docs" -Recurse -Name | Set-Content -Path "docs/docs_tree.txt" -Encoding UTF8
                     Write-Ok "Godot docs built successfully"
                     $docsReady = $true
                 } catch {
@@ -350,7 +367,7 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
       "env": { "GODOT_MCP_PORT": "6505" }
     },
     "godot-mcp-docs": {
-      "command": "python3",
+      "command": "$pythonCmd",
       "args": ["$docsMainPath"]
     }
   }

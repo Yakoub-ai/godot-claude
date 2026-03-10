@@ -110,6 +110,8 @@ cd godot-claude
 pwsh install.ps1 -ProjectPath "C:\Games\MyProject"
 ```
 
+> **Note:** The installer works with both PowerShell 7+ (`pwsh`) and Windows PowerShell 5.1 (`powershell`). Colors are only shown on PowerShell 7+. If you don't have `pwsh`, you can run: `powershell -ExecutionPolicy Bypass -File install.ps1 -ProjectPath "C:\Games\MyProject"`
+
 **Interactive mode** (no path argument):
 
 ```bash
