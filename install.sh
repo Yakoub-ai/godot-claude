@@ -148,6 +148,22 @@ if [ ! -f "$PROJECT_PATH/project.godot" ]; then
 fi
 ok "Godot project found: $PROJECT_PATH"
 
+# Check Node.js
+step "Checking Node.js…"
+if ! command -v node &>/dev/null; then
+    err "Node.js is not installed."
+    echo "  The godot-engine-mcp server requires Node.js 18+."
+    echo -e "  Install: ${CYAN}https://nodejs.org/${NC}"
+    exit 1
+fi
+NODE_VERSION=$(node -v | sed 's/^v//' | cut -d. -f1)
+if [ "$NODE_VERSION" -lt 18 ] 2>/dev/null; then
+    err "Node.js version is too old: $(node -v) (need 18+)"
+    echo -e "  Update: ${CYAN}https://nodejs.org/${NC}"
+    exit 1
+fi
+ok "Node.js $(node -v) found"
+
 # Source files
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_SRC="$SOURCE_DIR/agent"
@@ -155,6 +171,32 @@ CLAUDE_SRC="$SOURCE_DIR/CLAUDE.md"
 
 if [ ! -d "$AGENT_SRC" ] || [ ! -f "$CLAUDE_SRC" ]; then
     err "Missing agent/ or CLAUDE.md in godot-claude repository."
+    exit 1
+fi
+
+# Build godot-engine-mcp server
+SERVER_DIR="$SOURCE_DIR/server"
+if [ -d "$SERVER_DIR" ]; then
+    BUILD_NEEDED=true
+    if [ -f "$SERVER_DIR/build/index.js" ] && [ -f "$SERVER_DIR/src/index.ts" ]; then
+        if [ "$SERVER_DIR/build/index.js" -nt "$SERVER_DIR/src/index.ts" ]; then
+            BUILD_NEEDED=false
+        fi
+    fi
+
+    if [ "$BUILD_NEEDED" = true ]; then
+        step "Building godot-engine-mcp server…"
+        if (cd "$SERVER_DIR" && npm ci --silent && npm run build) 2>&1; then
+            ok "Server built successfully"
+        else
+            err "Server build failed. Check $SERVER_DIR for errors."
+            exit 1
+        fi
+    else
+        ok "Server already built — skipping"
+    fi
+else
+    err "Missing server/ directory in godot-claude repository."
     exit 1
 fi
 

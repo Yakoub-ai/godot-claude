@@ -165,7 +165,25 @@ if (-not (Test-Path $godotFile)) {
 }
 Write-Ok "Godot project found: $ProjectPath"
 
-# --- Step 3: Locate source files ---
+# --- Step 3: Check Node.js ---
+Write-Step "Checking Node.js..."
+$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+if (-not $nodeCmd) {
+    Write-Err "Node.js is not installed."
+    Write-Host "  The godot-engine-mcp server requires Node.js 18+."
+    Write-Host "  Install: $($CYAN)https://nodejs.org/$($RST)"
+    exit 1
+}
+$nodeVersion = (node -v) -replace '^v', ''
+$nodeMajor = [int]($nodeVersion.Split('.')[0])
+if ($nodeMajor -lt 18) {
+    Write-Err "Node.js version is too old: v$nodeVersion (need 18+)"
+    Write-Host "  Update: $($CYAN)https://nodejs.org/$($RST)"
+    exit 1
+}
+Write-Ok "Node.js v$nodeVersion found"
+
+# --- Step 4: Locate source files ---
 $sourceDir = $PSScriptRoot
 $agentSrc  = Join-Path $sourceDir "agent"
 $claudeSrc = Join-Path $sourceDir "CLAUDE.md"
@@ -176,7 +194,43 @@ if (-not (Test-Path $agentSrc) -or -not (Test-Path $claudeSrc)) {
     exit 1
 }
 
-# --- Step 4: Install .godot-claude/ ---
+# --- Step 5: Build godot-engine-mcp server ---
+$serverDir = Join-Path $sourceDir "server"
+if (Test-Path $serverDir) {
+    $buildNeeded = $true
+    $buildIndex = Join-Path $serverDir "build\index.js"
+    $srcIndex = Join-Path $serverDir "src\index.ts"
+    if ((Test-Path $buildIndex) -and (Test-Path $srcIndex)) {
+        $buildTime = (Get-Item $buildIndex).LastWriteTime
+        $srcTime   = (Get-Item $srcIndex).LastWriteTime
+        if ($buildTime -gt $srcTime) {
+            $buildNeeded = $false
+        }
+    }
+    if ($buildNeeded) {
+        Write-Step "Building godot-engine-mcp server..."
+        Push-Location $serverDir
+        try {
+            & npm ci --silent 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+            & npm run build 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
+            Write-Ok "Server built successfully"
+        } catch {
+            Write-Err "Server build failed."
+            Pop-Location
+            exit 1
+        }
+        Pop-Location
+    } else {
+        Write-Ok "Server already built — skipping"
+    }
+} else {
+    Write-Err "Missing server/ directory in godot-claude repository."
+    exit 1
+}
+
+# --- Step 6: Install .godot-claude/ ---
 $targetDir = Join-Path $ProjectPath ".godot-claude"
 Write-Step "Installing .godot-claude/ → project root"
 
@@ -221,7 +275,7 @@ if (Test-Path $targetDir) {
 }
 Write-Ok ".godot-claude/ installed"
 
-# --- Step 5: Install CLAUDE.md into .godot-claude/ (always update) ---
+# --- Step 7: Install CLAUDE.md into .godot-claude/ (always update) ---
 Write-Step "Installing CLAUDE.md → .godot-claude/"
 Copy-Item -Path $claudeSrc -Destination (Join-Path $targetDir "CLAUDE.md") -Force
 Write-Ok "Godot agent instructions installed"
@@ -244,7 +298,7 @@ if (-not (Test-Path $claudeDest)) {
     Write-Ok "Project CLAUDE.md already exists — not modified"
 }
 
-# --- Step 6: Create .mcp.json ---
+# --- Step 8: Create .mcp.json ---
 $mcpFile = Join-Path $ProjectPath ".mcp.json"
 if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
     Write-Step "Creating .mcp.json"
@@ -327,7 +381,7 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
     Write-Ok ".mcp.json already exists — skipped"
 }
 
-# --- Step 7: Update .gitignore ---
+# --- Step 9: Update .gitignore ---
 $gitignore = Join-Path $ProjectPath ".gitignore"
 $ignoreEntries = @(".godot-claude/memory/", ".godot-claude/session/", ".megamemory/", ".planning/")
 

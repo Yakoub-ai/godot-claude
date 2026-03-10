@@ -92,6 +92,17 @@ Phase 2: Core Combat (2-3 days)
 ## Output
 
 After all stages, generate:
-1. `.godot-claude/memory/project.md` — filled with all GDD data
-2. Project folder structure via MCP Pro
-3. Begin Phase 1 implementation
+
+1. **megamemory knowledge graph** — Record all GDD data as structured concepts:
+   - `megamemory:create_concept(name="[Game Name]", kind="project", summary="...")`
+   - Child concepts for: `tech_stack`, `entities`, `systems`, `art_plan`, `performance_budget`
+   - Link related concepts (e.g., entities → systems that use them)
+
+2. **GSD planning files** — Set up phase tracking:
+   - Create `.planning/PROJECT.md` with game overview + phase summary
+   - Create `.planning/ROADMAP.md` with numbered phases and acceptance criteria
+   - Each phase maps to GDD Stage 9 phases
+
+3. **Project scaffold** — Create folder structure via godot-engine-mcp
+
+4. **Begin Phase 1** — Start implementation via `/gsd:execute-phase` or direct development

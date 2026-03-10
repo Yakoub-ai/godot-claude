@@ -75,7 +75,7 @@ Requires `PIXELLAB_API_KEY` environment variable. If not set, tell the user:
 
 ---
 
-## Integration with Godot MCP Pro
+## Integration with godot-engine-mcp
 
 After downloading assets:
 ```
