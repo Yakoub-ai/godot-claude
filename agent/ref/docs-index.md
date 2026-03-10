@@ -1,6 +1,19 @@
 # Godot Docs MCP — Path Index
 
-Load this file when you need to look up Godot documentation via `get_documentation_file`.
+Load this file when you need to look up Godot documentation.
+
+---
+
+## Docs Lookup Strategy
+
+1. **Primary**: godot-mcp-docs (complete local docs — 1,582 files)
+   - `get_documentation_file("classes/class_characterbody2d.md")`
+   - `get_documentation_tree()` for browsing
+2. **Fallback**: context7 (if godot-mcp-docs unavailable or not configured)
+   - `resolve-library-id("godot engine", "GDScript game development")`
+   - `query-docs(libraryId, "CharacterBody2D methods")`
+
+**Rule**: Always look up docs before using unfamiliar classes. Never guess method names.
 
 ---
 
@@ -64,5 +77,3 @@ Load this file when you need to look up Godot documentation via `get_documentati
 |------|---------|
 | `get_documentation_tree` | Browse full doc structure (returns tree of paths) |
 | `get_documentation_file(path)` | Fetch specific doc content |
-
-**Rule**: Always look up docs before using unfamiliar classes. Never guess method names.

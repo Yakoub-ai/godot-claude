@@ -10,3 +10,6 @@ Thumbs.db
 # (they contain blank templates). The installer's .gitignore addition
 # only ignores .godot-claude/memory/ and .godot-claude/session/ in the
 # user's Godot project (where actual data accumulates).
+
+# Planning documents (local)
+docs/plans/

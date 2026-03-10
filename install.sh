@@ -148,6 +148,22 @@ if [ ! -f "$PROJECT_PATH/project.godot" ]; then
 fi
 ok "Godot project found: $PROJECT_PATH"
 
+# Check Node.js
+step "Checking Node.js…"
+if ! command -v node &>/dev/null; then
+    err "Node.js is not installed."
+    echo "  The godot-engine-mcp server requires Node.js 18+."
+    echo -e "  Install: ${CYAN}https://nodejs.org/${NC}"
+    exit 1
+fi
+NODE_VERSION=$(node -v | sed 's/^v//' | cut -d. -f1)
+if [ "$NODE_VERSION" -lt 18 ] 2>/dev/null; then
+    err "Node.js version is too old: $(node -v) (need 18+)"
+    echo -e "  Update: ${CYAN}https://nodejs.org/${NC}"
+    exit 1
+fi
+ok "Node.js $(node -v) found"
+
 # Source files
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_SRC="$SOURCE_DIR/agent"
@@ -158,13 +174,30 @@ if [ ! -d "$AGENT_SRC" ] || [ ! -f "$CLAUDE_SRC" ]; then
     exit 1
 fi
 
-# Install CLAUDE.md
-if [ -f "$PROJECT_PATH/CLAUDE.md" ]; then
-    ok "CLAUDE.md already exists — skipped"
+# Build godot-engine-mcp server
+SERVER_DIR="$SOURCE_DIR/server"
+if [ -d "$SERVER_DIR" ]; then
+    BUILD_NEEDED=true
+    if [ -f "$SERVER_DIR/build/index.js" ] && [ -f "$SERVER_DIR/src/index.ts" ]; then
+        if [ "$SERVER_DIR/build/index.js" -nt "$SERVER_DIR/src/index.ts" ]; then
+            BUILD_NEEDED=false
+        fi
+    fi
+
+    if [ "$BUILD_NEEDED" = true ]; then
+        step "Building godot-engine-mcp server…"
+        if (cd "$SERVER_DIR" && npm ci --silent && npm run build) 2>&1; then
+            ok "Server built successfully"
+        else
+            err "Server build failed. Check $SERVER_DIR for errors."
+            exit 1
+        fi
+    else
+        ok "Server already built — skipping"
+    fi
 else
-    step "Installing CLAUDE.md → project root"
-    cp "$CLAUDE_SRC" "$PROJECT_PATH/CLAUDE.md"
-    ok "CLAUDE.md installed"
+    err "Missing server/ directory in godot-claude repository."
+    exit 1
 fi
 
 # Install .godot-claude/
@@ -201,25 +234,111 @@ else
 fi
 ok ".godot-claude/ installed"
 
+# Install CLAUDE.md into .godot-claude/ (always update — this is the agent's instructions)
+step "Installing CLAUDE.md → .godot-claude/"
+cp "$CLAUDE_SRC" "$TARGET_DIR/CLAUDE.md"
+ok "Godot agent instructions installed"
+
+# If no project CLAUDE.md exists, create a minimal one
+if [ ! -f "$PROJECT_PATH/CLAUDE.md" ]; then
+    step "Creating project CLAUDE.md"
+    cat > "$PROJECT_PATH/CLAUDE.md" << 'TMPL'
+# Project Instructions
+
+<!-- Godot agent instructions are in .godot-claude/CLAUDE.md (loaded automatically) -->
+<!-- Add your project-specific instructions below -->
+
+## Project Overview
+[Describe your game here]
+TMPL
+    ok "Project CLAUDE.md created (customize it for your game)"
+else
+    ok "Project CLAUDE.md already exists — not modified"
+fi
+
 # Create .mcp.json
 MCP_FILE="$PROJECT_PATH/.mcp.json"
 if [ "$SKIP_MCP" = false ] && [ ! -f "$MCP_FILE" ]; then
     step "Creating .mcp.json"
-    cat > "$MCP_FILE" << 'EOF'
+
+    # Docs server is bundled in the repo
+    DOCS_PATH="$SOURCE_DIR/docs-server"
+
+    # Check if docs have been built (one-time setup)
+    DOCS_READY=false
+    if [ -d "$DOCS_PATH/docs" ] && [ -f "$DOCS_PATH/docs/docs_tree.txt" ]; then
+        DOCS_READY=true
+    fi
+
+    # Check Python + pandoc for docs server
+    DOCS_AVAILABLE=false
+    if command -v python3 &>/dev/null && [ -f "$DOCS_PATH/main.py" ]; then
+        DOCS_AVAILABLE=true
+        if [ "$DOCS_READY" = false ]; then
+            echo ""
+            echo -e "  ${BOLD}Godot docs setup (one-time)${NC}"
+            echo -e "  The docs server needs to download and convert the Godot documentation."
+            echo -e "  This requires pandoc and takes ~2 minutes."
+            echo ""
+            if command -v pandoc &>/dev/null; then
+                read -rp "  Build docs now? [Y/n]: " BUILD_DOCS
+                echo ""
+                if [ -z "$BUILD_DOCS" ] || [[ "$BUILD_DOCS" =~ ^[Yy] ]]; then
+                    step "Building Godot documentation..."
+                    (cd "$DOCS_PATH" && python3 docs_converter/godot_docs_converter.py && find docs -type f | sort > docs/docs_tree.txt) 2>&1
+                    if [ $? -eq 0 ]; then
+                        ok "Godot docs built successfully"
+                        DOCS_READY=true
+                    else
+                        warn "Docs build failed — agent will use context7 for docs"
+                    fi
+                fi
+            else
+                warn "pandoc not installed — needed for docs conversion"
+                echo -e "    Install: ${CYAN}sudo apt install pandoc${NC}  (Ubuntu/Debian)"
+                echo -e "             ${CYAN}brew install pandoc${NC}       (macOS)"
+                echo ""
+            fi
+        fi
+    fi
+
+    # Generate .mcp.json
+    if [ "$DOCS_AVAILABLE" = true ]; then
+        cat > "$MCP_FILE" << EOF
 {
   "mcpServers": {
-    "godot-mcp-pro": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/godot-mcp-pro"]
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$SOURCE_DIR/server/build/index.js"],
+      "env": { "GODOT_MCP_PORT": "6505" }
     },
     "godot-mcp-docs": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/godot-mcp-docs"]
+      "command": "python3",
+      "args": ["$DOCS_PATH/main.py"]
     }
   }
 }
 EOF
-    ok ".mcp.json created (PixelLab not included — add manually with API key)"
+        if [ "$DOCS_READY" = true ]; then
+            ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs)"
+        else
+            ok ".mcp.json created (docs server configured but docs not built yet)"
+            warn "Run later: cd $DOCS_PATH && python3 docs_converter/godot_docs_converter.py && find docs -type f | sort > docs/docs_tree.txt"
+        fi
+    else
+        cat > "$MCP_FILE" << EOF
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$SOURCE_DIR/server/build/index.js"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    }
+  }
+}
+EOF
+        ok ".mcp.json created (godot-engine-mcp only — agent will use context7 for docs)"
+    fi
 elif [ -f "$MCP_FILE" ]; then
     ok ".mcp.json already exists — skipped"
 fi
@@ -227,12 +346,28 @@ fi
 # Update .gitignore
 GITIGNORE="$PROJECT_PATH/.gitignore"
 if [ -f "$GITIGNORE" ]; then
-    if ! grep -q ".godot-claude/memory/" "$GITIGNORE" 2>/dev/null; then
+    NEEDS_UPDATE=false
+    for entry in ".godot-claude/memory/" ".godot-claude/session/" ".megamemory/" ".planning/"; do
+        if ! grep -q "$entry" "$GITIGNORE" 2>/dev/null; then
+            NEEDS_UPDATE=true
+            break
+        fi
+    done
+    if [ "$NEEDS_UPDATE" = true ]; then
         step "Updating .gitignore"
-        echo "" >> "$GITIGNORE"
-        echo "# godot-claude (personal data — do not commit)" >> "$GITIGNORE"
-        echo ".godot-claude/memory/" >> "$GITIGNORE"
-        echo ".godot-claude/session/" >> "$GITIGNORE"
+        # Add missing entries
+        if ! grep -q ".godot-claude/memory/" "$GITIGNORE" 2>/dev/null; then
+            echo "" >> "$GITIGNORE"
+            echo "# godot-claude (personal data — do not commit)" >> "$GITIGNORE"
+            echo ".godot-claude/memory/" >> "$GITIGNORE"
+            echo ".godot-claude/session/" >> "$GITIGNORE"
+        fi
+        if ! grep -q ".megamemory/" "$GITIGNORE" 2>/dev/null; then
+            echo "" >> "$GITIGNORE"
+            echo "# Knowledge graph and planning (local state)" >> "$GITIGNORE"
+            echo ".megamemory/" >> "$GITIGNORE"
+            echo ".planning/" >> "$GITIGNORE"
+        fi
         ok ".gitignore updated"
     fi
 else
@@ -244,6 +379,10 @@ else
 # godot-claude (personal data — do not commit)
 .godot-claude/memory/
 .godot-claude/session/
+
+# Knowledge graph and planning (local state)
+.megamemory/
+.planning/
 EOF
     ok ".gitignore created"
 fi

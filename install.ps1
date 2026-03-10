@@ -4,15 +4,15 @@
     Install godot-claude agent into a Godot project.
 
 .DESCRIPTION
-    Copies the Claude Code agent files (CLAUDE.md + .godot-claude/) into the
+    Copies the Claude Code agent files (.godot-claude/ + CLAUDE.md) into the
     root of a Godot 4.x project. This is everything Claude Code needs to
     act as an expert Godot development agent.
 
     Files installed:
-      CLAUDE.md              → Agent instructions (auto-read by Claude Code)
-      .godot-claude/ref/     → Reference files (loaded on demand, not all at once)
-      .godot-claude/memory/  → Project memory (grows over time)
-      .godot-claude/session/ → Session continuity across /clear
+      .godot-claude/CLAUDE.md  -> Agent instructions (auto-read by Claude Code)
+      .godot-claude/ref/       -> Reference files (loaded on demand, not all at once)
+      .godot-claude/memory/    -> Project memory stubs (megamemory used instead)
+      .godot-claude/session/   -> Session continuity across /clear
 
 .PARAMETER ProjectPath
     Path to the Godot project root (must contain project.godot).
@@ -34,22 +34,26 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# --- Colors (requires PowerShell 7+) ---
-$RST    = "`e[0m"
-$RED    = "`e[31m"
-$GREEN  = "`e[32m"
-$YELLOW = "`e[33m"
-$CYAN   = "`e[36m"
-$BOLD   = "`e[1m"
+# --- Colors (ANSI escape sequences -- PS 7+ only, graceful fallback for 5.x) ---
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+    $RST    = "`e[0m"
+    $RED    = "`e[31m"
+    $GREEN  = "`e[32m"
+    $YELLOW = "`e[33m"
+    $CYAN   = "`e[36m"
+    $BOLD   = "`e[1m"
+} else {
+    $RST = ""; $RED = ""; $GREEN = ""; $YELLOW = ""; $CYAN = ""; $BOLD = ""
+}
 
 function Write-Header {
     Write-Host ""
-    Write-Host "$($BOLD)$($CYAN)╔══════════════════════════════════════════╗$($RST)"
-    Write-Host "$($BOLD)$($CYAN)║   godot-claude - Claude Code Agent      ║$($RST)"
-    Write-Host "$($BOLD)$($CYAN)║   for Godot 4.x Game Development        ║$($RST)"
-    Write-Host "$($BOLD)$($CYAN)║                                          ║$($RST)"
-    Write-Host "$($BOLD)$($CYAN)║   Compatible with: Claude Code (CLI)     ║$($RST)"
-    Write-Host "$($BOLD)$($CYAN)╚══════════════════════════════════════════╝$($RST)"
+    Write-Host "$($BOLD)$($CYAN)+==========================================+$($RST)"
+    Write-Host "$($BOLD)$($CYAN)|   godot-claude - Claude Code Agent      |$($RST)"
+    Write-Host "$($BOLD)$($CYAN)|   for Godot 4.x Game Development        |$($RST)"
+    Write-Host "$($BOLD)$($CYAN)|                                          |$($RST)"
+    Write-Host "$($BOLD)$($CYAN)|   Compatible with: Claude Code (CLI)     |$($RST)"
+    Write-Host "$($BOLD)$($CYAN)+==========================================+$($RST)"
     Write-Host ""
 }
 
@@ -95,7 +99,7 @@ function Resolve-ProjectPath {
         return $Chosen
     }
 
-    # Parent directory — find sub-projects up to 2 levels deep
+    # Parent directory -- find sub-projects up to 2 levels deep
     $subs = Get-ChildItem -Path $Chosen -Filter "project.godot" -Recurse -Depth 2 -ErrorAction SilentlyContinue |
             ForEach-Object { $_.DirectoryName } | Sort-Object
 
@@ -109,7 +113,7 @@ function Resolve-ProjectPath {
         return $subs[0]
     }
 
-    # Multiple projects — let user pick
+    # Multiple projects -- let user pick
     Write-Host ""
     Write-Host "  $($BOLD)Multiple Godot projects found:$($RST)"
     Write-Host ""
@@ -133,7 +137,7 @@ if (-not $ProjectPath) {
     $chosen = Open-FolderDialog
 
     if (-not $chosen) {
-        # User cancelled — fall back to typed input
+        # User cancelled -- fall back to typed input
         Write-Host ""
         Write-Warn "No folder selected. Enter path manually."
         Write-Host ""
@@ -165,7 +169,25 @@ if (-not (Test-Path $godotFile)) {
 }
 Write-Ok "Godot project found: $ProjectPath"
 
-# --- Step 3: Locate source files ---
+# --- Step 3: Check Node.js ---
+Write-Step "Checking Node.js..."
+$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+if (-not $nodeCmd) {
+    Write-Err "Node.js is not installed."
+    Write-Host "  The godot-engine-mcp server requires Node.js 18+."
+    Write-Host "  Install: $($CYAN)https://nodejs.org/$($RST)"
+    exit 1
+}
+$nodeVersion = (node -v) -replace '^v', ''
+$nodeMajor = [int]($nodeVersion.Split('.')[0])
+if ($nodeMajor -lt 18) {
+    Write-Err "Node.js version is too old: v$nodeVersion (need 18+)"
+    Write-Host "  Update: $($CYAN)https://nodejs.org/$($RST)"
+    exit 1
+}
+Write-Ok "Node.js v$nodeVersion found"
+
+# --- Step 4: Locate source files ---
 $sourceDir = $PSScriptRoot
 $agentSrc  = Join-Path $sourceDir "agent"
 $claudeSrc = Join-Path $sourceDir "CLAUDE.md"
@@ -176,19 +198,45 @@ if (-not (Test-Path $agentSrc) -or -not (Test-Path $claudeSrc)) {
     exit 1
 }
 
-# --- Step 4: Install CLAUDE.md ---
-$claudeDest = Join-Path $ProjectPath "CLAUDE.md"
-if (Test-Path $claudeDest) {
-    Write-Ok "CLAUDE.md already exists — skipped"
+# --- Step 5: Build godot-engine-mcp server ---
+$serverDir = Join-Path $sourceDir "server"
+if (Test-Path $serverDir) {
+    $buildNeeded = $true
+    $buildIndex = Join-Path $serverDir "build\index.js"
+    $srcIndex = Join-Path $serverDir "src\index.ts"
+    if ((Test-Path $buildIndex) -and (Test-Path $srcIndex)) {
+        $buildTime = (Get-Item $buildIndex).LastWriteTime
+        $srcTime   = (Get-Item $srcIndex).LastWriteTime
+        if ($buildTime -gt $srcTime) {
+            $buildNeeded = $false
+        }
+    }
+    if ($buildNeeded) {
+        Write-Step "Building godot-engine-mcp server..."
+        Push-Location $serverDir
+        try {
+            & npm ci --silent 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+            & npm run build 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
+            Write-Ok "Server built successfully"
+        } catch {
+            Write-Err "Server build failed."
+            Pop-Location
+            exit 1
+        }
+        Pop-Location
+    } else {
+        Write-Ok "Server already built -- skipping"
+    }
 } else {
-    Write-Step "Installing CLAUDE.md → project root"
-    Copy-Item -Path $claudeSrc -Destination $claudeDest
-    Write-Ok "CLAUDE.md installed"
+    Write-Err "Missing server/ directory in godot-claude repository."
+    exit 1
 }
 
-# --- Step 5: Install .godot-claude/ ---
+# --- Step 6: Install .godot-claude/ ---
 $targetDir = Join-Path $ProjectPath ".godot-claude"
-Write-Step "Installing .godot-claude/ → project root"
+Write-Step "Installing .godot-claude/ -> project root"
 
 if (Test-Path $targetDir) {
     # Preserve user's memory and session data
@@ -231,32 +279,128 @@ if (Test-Path $targetDir) {
 }
 Write-Ok ".godot-claude/ installed"
 
-# --- Step 6: Create .mcp.json ---
+# --- Step 7: Install CLAUDE.md into .godot-claude/ (always update) ---
+Write-Step "Installing CLAUDE.md -> .godot-claude/"
+Copy-Item -Path $claudeSrc -Destination (Join-Path $targetDir "CLAUDE.md") -Force
+Write-Ok "Godot agent instructions installed"
+
+# If no project CLAUDE.md exists, create a minimal one
+$claudeDest = Join-Path $ProjectPath "CLAUDE.md"
+if (-not (Test-Path $claudeDest)) {
+    Write-Step "Creating project CLAUDE.md"
+    @"
+# Project Instructions
+
+<!-- Godot agent instructions are in .godot-claude/CLAUDE.md (loaded automatically) -->
+<!-- Add your project-specific instructions below -->
+
+## Project Overview
+[Describe your game here]
+"@ | Set-Content -Path $claudeDest -Encoding UTF8
+    Write-Ok "Project CLAUDE.md created (customize it for your game)"
+} else {
+    Write-Ok "Project CLAUDE.md already exists -- not modified"
+}
+
+# --- Step 8: Create .mcp.json ---
 $mcpFile = Join-Path $ProjectPath ".mcp.json"
 if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
     Write-Step "Creating .mcp.json"
-    @'
+
+    # Docs server is bundled in the repo
+    $docsPath = Join-Path $sourceDir "docs-server"
+    # Detect Python 3 -- Windows often has 'python' instead of 'python3'
+    $pythonCmd = $null
+    foreach ($candidate in @("python3", "python")) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $ver = & $candidate --version 2>&1
+            if ($ver -match 'Python 3') {
+                $pythonCmd = $candidate
+                break
+            }
+        }
+    }
+    $docsAvailable = ($null -ne $pythonCmd) -and (Test-Path (Join-Path $docsPath "main.py"))
+    $docsReady = (Test-Path (Join-Path $docsPath "docs")) -and (Test-Path (Join-Path $docsPath "docs\docs_tree.txt"))
+
+    if ($docsAvailable -and -not $docsReady) {
+        Write-Host ""
+        Write-Host "  $($BOLD)Godot docs setup (one-time)$($RST)"
+        Write-Host "  The docs server needs to download and convert the Godot documentation."
+        Write-Host "  This requires pandoc and takes ~2 minutes."
+        Write-Host ""
+        if (Get-Command pandoc -ErrorAction SilentlyContinue) {
+            $buildDocs = Read-Host "  Build docs now? [Y/n]"
+            Write-Host ""
+            if (-not $buildDocs -or $buildDocs -match '^[Yy]') {
+                Write-Step "Building Godot documentation..."
+                Push-Location $docsPath
+                try {
+                    & $pythonCmd docs_converter/godot_docs_converter.py
+                    # Generate docs tree listing (cross-platform -- no 'tree' dependency)
+                    Get-ChildItem -Path "docs" -Recurse -Name | Set-Content -Path "docs/docs_tree.txt" -Encoding UTF8
+                    Write-Ok "Godot docs built successfully"
+                    $docsReady = $true
+                } catch {
+                    Write-Warn "Docs build failed -- agent will use context7 for docs"
+                }
+                Pop-Location
+            }
+        } else {
+            Write-Warn "pandoc not installed -- needed for docs conversion"
+            Write-Host "    Install: $($CYAN)winget install pandoc$($RST)"
+        }
+    }
+
+    # Generate .mcp.json
+    $serverPath = (Join-Path $sourceDir "server\build\index.js").Replace('\', '/')
+    $docsMainPath = (Join-Path $docsPath "main.py").Replace('\', '/')
+
+    if ($docsAvailable) {
+        $mcpContent = @"
 {
   "mcpServers": {
-    "godot-mcp-pro": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/godot-mcp-pro"]
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$serverPath"],
+      "env": { "GODOT_MCP_PORT": "6505" }
     },
     "godot-mcp-docs": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/godot-mcp-docs"]
+      "command": "$pythonCmd",
+      "args": ["$docsMainPath"]
     }
   }
 }
-'@ | Set-Content -Path $mcpFile -Encoding UTF8
-    Write-Ok ".mcp.json created (PixelLab not included — add manually with API key)"
+"@
+        $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
+        if ($docsReady) {
+            Write-Ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs)"
+        } else {
+            Write-Ok ".mcp.json created (docs server configured but docs not built yet)"
+        }
+    } else {
+        $mcpContent = @"
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$serverPath"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    }
+  }
+}
+"@
+        $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
+        Write-Ok ".mcp.json created (godot-engine-mcp only -- agent will use context7 for docs)"
+    }
 } elseif (Test-Path $mcpFile) {
-    Write-Ok ".mcp.json already exists — skipped"
+    Write-Ok ".mcp.json already exists -- skipped"
 }
 
-# --- Step 7: Update .gitignore ---
+# --- Step 9: Update .gitignore ---
 $gitignore = Join-Path $ProjectPath ".gitignore"
-$ignoreEntries = @(".godot-claude/memory/", ".godot-claude/session/")
+$ignoreEntries = @(".godot-claude/memory/", ".godot-claude/session/", ".megamemory/", ".planning/")
 
 if (Test-Path $gitignore) {
     $content = Get-Content $gitignore -Raw
@@ -266,7 +410,12 @@ if (Test-Path $gitignore) {
     }
     if ($needsUpdate) {
         Write-Step "Updating .gitignore"
-        Add-Content -Path $gitignore -Value "`n# godot-claude (personal data — do not commit)`n.godot-claude/memory/`n.godot-claude/session/"
+        if ($content -notmatch [regex]::Escape(".godot-claude/memory/")) {
+            Add-Content -Path $gitignore -Value "`n# godot-claude (personal data -- do not commit)`n.godot-claude/memory/`n.godot-claude/session/"
+        }
+        if ($content -notmatch [regex]::Escape(".megamemory/")) {
+            Add-Content -Path $gitignore -Value "`n# Knowledge graph and planning (local state)`n.megamemory/`n.planning/"
+        }
         Write-Ok ".gitignore updated"
     }
 } else {
@@ -275,24 +424,28 @@ if (Test-Path $gitignore) {
 # Godot
 .godot/
 
-# godot-claude (personal data — do not commit)
+# godot-claude (personal data -- do not commit)
 .godot-claude/memory/
 .godot-claude/session/
+
+# Knowledge graph and planning (local state)
+.megamemory/
+.planning/
 "@ | Set-Content -Path $gitignore -Encoding UTF8
     Write-Ok ".gitignore created"
 }
 
 # --- Done ---
 Write-Host ""
-Write-Host "$($BOLD)$($GREEN)==════════════════════════════════════════$($RST)"
+Write-Host "$($BOLD)$($GREEN)==========================================$($RST)"
 Write-Host "$($BOLD)$($GREEN)  Installation Complete$($RST)"
-Write-Host "$($BOLD)$($GREEN)==════════════════════════════════════════$($RST)"
+Write-Host "$($BOLD)$($GREEN)==========================================$($RST)"
 Write-Host ""
 Write-Host "  $($BOLD)What was installed:$($RST)"
-Write-Host "    CLAUDE.md                - Agent brain (Claude Code reads this automatically)"
+Write-Host "    .godot-claude/CLAUDE.md  - Agent brain (Claude Code reads this automatically)"
 Write-Host "    .godot-claude/ref/       - 7 reference files (loaded on demand, not all at once)"
-Write-Host "    .godot-claude/memory/    - Project memory (grows as you develop)"
 Write-Host "    .godot-claude/session/   - Session state (survives /clear)"
+Write-Host "    .mcp.json                - MCP server configuration"
 Write-Host ""
 Write-Host "  $($BOLD)How to use:$($RST)"
 Write-Host "    $($CYAN)cd $ProjectPath$($RST)"
