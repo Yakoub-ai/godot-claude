@@ -49,8 +49,8 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
 function Write-Header {
     Write-Host ""
     Write-Host "$($BOLD)$($CYAN)+==========================================+$($RST)"
-    Write-Host "$($BOLD)$($CYAN)|   godot-claude - Claude Code Agent      |$($RST)"
-    Write-Host "$($BOLD)$($CYAN)|   for Godot 4.x Game Development        |$($RST)"
+    Write-Host "$($BOLD)$($CYAN)|   godot-claude - Claude Code Agent       |$($RST)"
+    Write-Host "$($BOLD)$($CYAN)|   for Godot 4.x Game Development         |$($RST)"
     Write-Host "$($BOLD)$($CYAN)|                                          |$($RST)"
     Write-Host "$($BOLD)$($CYAN)|   Compatible with: Claude Code (CLI)     |$($RST)"
     Write-Host "$($BOLD)$($CYAN)+==========================================+$($RST)"

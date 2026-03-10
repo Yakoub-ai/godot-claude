@@ -22,11 +22,24 @@ warn()  { echo -e "  ${YELLOW}⚠${NC} $1"; }
 err()   { echo -e "  ${RED}✗${NC} $1"; }
 ok()    { echo -e "  ${GREEN}✓${NC} $1"; }
 
+# Run a command with a timeout (seconds).
+# On macOS, `timeout` may not exist, so fall back to perl.
+run_with_timeout() {
+    local timeout_secs="$1"; shift
+    if command -v timeout &>/dev/null; then
+        timeout "$timeout_secs" "$@"
+    elif command -v gtimeout &>/dev/null; then
+        gtimeout "$timeout_secs" "$@"
+    else
+        perl -e 'alarm shift; exec @ARGV' "$timeout_secs" "$@"
+    fi
+}
+
 # Header
 echo ""
 echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}${CYAN}║   godot-claude — Claude Code Agent      ║${NC}"
-echo -e "${BOLD}${CYAN}║   for Godot 4.x Game Development        ║${NC}"
+echo -e "${BOLD}${CYAN}║   godot-claude — Claude Code Agent       ║${NC}"
+echo -e "${BOLD}${CYAN}║   for Godot 4.x Game Development         ║${NC}"
 echo -e "${BOLD}${CYAN}║                                          ║${NC}"
 echo -e "${BOLD}${CYAN}║   Compatible with: Claude Code (CLI)     ║${NC}"
 echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════╝${NC}"
@@ -42,16 +55,29 @@ for arg in "$@"; do
     esac
 done
 
+# Detect WSL (Windows Subsystem for Linux)
+is_wsl() {
+    uname -r 2>/dev/null | grep -qiE 'microsoft|wsl'
+}
+
 # Open a native folder picker dialog, returns selected path via stdout
 open_folder_dialog() {
     local title="Select Godot Project or Parent Directory"
     local selected=""
 
+    if is_wsl; then
+        # WSL: open Windows Explorer and fall back to manual input
+        warn "Detected WSL. Opening Windows Explorer to pick a folder."
+        explorer.exe . 2>/dev/null || true
+        warn "After selecting a folder in Explorer, paste the path here (e.g. C:\\Users\\you\\... or \\wsl$\\...)."
+        return 0
+    fi
+
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS — AppleScript
-        selected=$(osascript -e \
-            'tell app "System Events" to set f to choose folder with prompt "'"$title"'"' \
-            -e 'POSIX path of f' 2>/dev/null) || true
+        # macOS — open Finder and fall back to manual input
+        warn "Opening Finder. After you locate your Godot project folder, paste the path below."
+        open . 2>/dev/null || true
+        return 0
 
     elif command -v zenity &>/dev/null; then
         # Linux — GNOME / GTK
@@ -64,6 +90,12 @@ open_folder_dialog() {
     elif command -v yad &>/dev/null; then
         # Linux — yad (another GTK dialog)
         selected=$(yad --file --directory --title="$title" 2>/dev/null) || true
+    else
+        # Linux without a supported dialog tool: open current dir (if GUI) and fall back to manual
+        if [ -n "${DISPLAY-}" ] || [ -n "${WAYLAND_DISPLAY-}" ]; then
+            warn "No folder-picker tool found (zenity/kdialog/yad). Opening current directory and falling back to manual input."
+            xdg-open . 2>/dev/null || true
+        fi
     fi
 
     echo "$selected"
