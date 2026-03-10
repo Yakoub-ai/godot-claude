@@ -25,27 +25,42 @@ godot-claude installs into your Godot project and turns Claude Code into an expe
 ## Architecture
 
 ```
-Claude Code (CLI)
-    |
-    | stdio (MCP protocol)
-    |
-    +---> godot-engine-mcp (Node.js)
-    |         |
-    |         | WebSocket :6505
-    |         v
-    |     Godot Editor Plugin (GDScript)
-    |
-    +---> godot-mcp-docs (Python)
-    |         Offline Godot 4.x documentation (1,582 files)
-    |
-    +---> context7 (cloud, optional fallback)
-    |         Godot docs when offline docs aren't configured
-    |
-    +---> PixelLab (cloud, optional)
-              AI pixel art generation
+                          Claude Code (CLI)
+                                |
+                    stdio (Model Context Protocol)
+                                |
+          +---------------------+---------------------+
+          |                     |                     |
+  godot-engine-mcp      godot-mcp-docs          PixelLab
+    (Node.js)              (Python)              (cloud)
+     209 tools           1,582 docs            pixel art
+          |                     |
+   WebSocket :6505        local file I/O
+          |                     |
+  Godot Editor Plugin    docs/ directory
+    (GDScript)           (RST → Markdown)
+          |
+    Godot 4.x Engine
 ```
 
-Claude Code communicates with the MCP servers over stdio. The godot-engine-mcp server connects to a running Godot editor via WebSocket on port 6505, where a companion GDScript plugin receives and executes commands.
+### How it works
+
+**godot-engine-mcp** is the core. It is a TypeScript MCP server that exposes 209 tools for controlling the Godot editor. Claude Code connects to it over stdio. Internally, it opens a WebSocket server on port 6505 and waits for the Godot editor to connect via a companion GDScript plugin. When Claude calls a tool (e.g., `create_scene`, `add_node`, `validate_script`), the server sends a JSON-RPC 2.0 request over WebSocket, the plugin executes it in the editor, and the result comes back.
+
+Tools are organized into 23 **categories**. Four core categories (scene, node, script, editor) are always available. The other 19 are loaded on demand — the agent calls `enable_category` when it needs animation tools, physics tools, etc. Categories auto-unload after 10 minutes of inactivity to keep the tool list manageable.
+
+**godot-mcp-docs** provides offline access to the full Godot 4.x documentation — every class, tutorial, and guide. If it is not configured, the agent automatically falls back to **context7** (a cloud-based docs service built into Claude Code).
+
+**PixelLab** is optional. It generates AI pixel art (characters, tilesets, animations) via API and integrates the results back into Godot as sprites and resources.
+
+### Knowledge layer
+
+The agent maintains context across sessions through two mechanisms:
+
+- **megamemory** — A SQLite-backed knowledge graph (`.megamemory/`) that stores architecture decisions, discovered patterns, error fixes, and project state as linked concepts. Queried at session start and updated after each task.
+- **Session files** — A slim handoff file (`.godot-claude/session/last-session.md`) that captures the current task, next steps, and blockers. Written before `/clear`, read after.
+
+Reference files in `.godot-claude/ref/` (error patterns, GDScript conventions, performance guides) are loaded on demand — never all at once — to protect the context window.
 
 ---
 
