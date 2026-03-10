@@ -89,7 +89,8 @@ Reference files in `.godot-claude/ref/` (error patterns, GDScript conventions, p
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_ORG/godot-claude.git
+git clone https://github.com/Yakoub-ai/godot-claude.git
+cd godot-claude
 ```
 
 ### 2. Run the installer
