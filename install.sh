@@ -162,6 +162,8 @@ if [ -z "$PROJECT_PATH" ]; then
     fi
 
     [ -z "$CHOSEN" ] && { err "No directory selected."; exit 1; }
+    # Expand ~ before passing to resolve_project_path
+    CHOSEN="${CHOSEN/#\~/$HOME}"
     resolve_project_path "$CHOSEN"
 fi
 
@@ -200,6 +202,7 @@ ok "Node.js $(node -v) found"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_SRC="$SOURCE_DIR/agent"
 CLAUDE_SRC="$SOURCE_DIR/CLAUDE.md"
+ADDONS_SRC="$SOURCE_DIR/addons"
 
 if [ ! -d "$AGENT_SRC" ] || [ ! -f "$CLAUDE_SRC" ]; then
     err "Missing agent/ or CLAUDE.md in godot-claude repository."
@@ -237,32 +240,12 @@ TARGET_DIR="$PROJECT_PATH/.godot-claude"
 step "Installing .godot-claude/ → project root"
 
 if [ -d "$TARGET_DIR" ]; then
-    # Preserve memory and session
-    TEMP_BACKUP=$(mktemp -d)
-    if [ -d "$TARGET_DIR/memory" ]; then
-        warn "Preserving existing memory data"
-        cp -r "$TARGET_DIR/memory" "$TEMP_BACKUP/memory"
-    fi
-    if [ -d "$TARGET_DIR/session" ]; then
-        warn "Preserving existing session data"
-        cp -r "$TARGET_DIR/session" "$TEMP_BACKUP/session"
-    fi
-
-    rm -rf "$TARGET_DIR"
-    cp -r "$AGENT_SRC" "$TARGET_DIR"
-
-    # Restore
-    if [ -d "$TEMP_BACKUP/memory" ]; then
-        rm -rf "$TARGET_DIR/memory"
-        cp -r "$TEMP_BACKUP/memory" "$TARGET_DIR/memory"
-    fi
-    if [ -d "$TEMP_BACKUP/session" ]; then
-        rm -rf "$TARGET_DIR/session"
-        cp -r "$TEMP_BACKUP/session" "$TARGET_DIR/session"
-    fi
-    rm -rf "$TEMP_BACKUP"
+    # Clear out old reference files to ensure clean update, but keep memory/session
+    rm -rf "$TARGET_DIR/ref"
+    cp -r "$AGENT_SRC/"* "$TARGET_DIR/"
 else
-    cp -r "$AGENT_SRC" "$TARGET_DIR"
+    mkdir -p "$TARGET_DIR"
+    cp -r "$AGENT_SRC/"* "$TARGET_DIR/"
 fi
 ok ".godot-claude/ installed"
 
@@ -270,6 +253,14 @@ ok ".godot-claude/ installed"
 step "Installing CLAUDE.md → .godot-claude/"
 cp "$CLAUDE_SRC" "$TARGET_DIR/CLAUDE.md"
 ok "Godot agent instructions installed"
+
+# Install addons
+if [ -d "$ADDONS_SRC" ]; then
+    step "Installing addons/ → project root"
+    mkdir -p "$PROJECT_PATH/addons"
+    cp -r "$ADDONS_SRC/"* "$PROJECT_PATH/addons/"
+    ok "Godot plugin (addons/) installed"
+fi
 
 # If no project CLAUDE.md exists, create a minimal one
 if [ ! -f "$PROJECT_PATH/CLAUDE.md" ]; then

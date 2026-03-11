@@ -136,7 +136,13 @@ If you point the installer at a parent directory, it will find all `project.godo
 
 On re-install, your memory, session data, and project `CLAUDE.md` are preserved.
 
-### 4. Start Claude Code
+### 4. Install the Godot Plugin
+
+Copy the `addons` folder from the `godot-claude` repository into your Godot project's root directory. The folder should be placed so that it is available at `res://addons/godot-claude` (or similar, depending on the exact plugin folder name).
+
+Then, open your Godot project, go to **Project > Project Settings > Plugins**, and activate the MCP plugin.
+
+### 5. Start Claude Code
 
 ```bash
 cd /path/to/your/godot-project

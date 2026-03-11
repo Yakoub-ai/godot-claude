@@ -191,6 +191,7 @@ Write-Ok "Node.js v$nodeVersion found"
 $sourceDir = $PSScriptRoot
 $agentSrc  = Join-Path $sourceDir "agent"
 $claudeSrc = Join-Path $sourceDir "CLAUDE.md"
+$addonsSrc = Join-Path $sourceDir "addons"
 
 if (-not (Test-Path $agentSrc) -or -not (Test-Path $claudeSrc)) {
     Write-Err "Missing agent/ or CLAUDE.md in godot-claude repository."
@@ -239,43 +240,16 @@ $targetDir = Join-Path $ProjectPath ".godot-claude"
 Write-Step "Installing .godot-claude/ -> project root"
 
 if (Test-Path $targetDir) {
-    # Preserve user's memory and session data
-    $memoryDir  = Join-Path $targetDir "memory"
-    $sessionDir = Join-Path $targetDir "session"
-
-    $tempBackup = Join-Path $env:TEMP "godot-claude-bak-$(Get-Date -Format 'yyyyMMddHHmmss')"
-
-    if (Test-Path $memoryDir) {
-        Write-Warn "Preserving existing memory data"
-        New-Item -ItemType Directory -Path $tempBackup -Force | Out-Null
-        Copy-Item -Path $memoryDir -Destination (Join-Path $tempBackup "memory") -Recurse -Force
+    # Remove old reference files but keep memory and session
+    $refDir = Join-Path $targetDir "ref"
+    if (Test-Path $refDir) {
+        Remove-Item -Path $refDir -Recurse -Force
     }
-    if (Test-Path $sessionDir) {
-        Write-Warn "Preserving existing session data"
-        if (-not (Test-Path $tempBackup)) { New-Item -ItemType Directory -Path $tempBackup -Force | Out-Null }
-        Copy-Item -Path $sessionDir -Destination (Join-Path $tempBackup "session") -Recurse -Force
-    }
-
-    # Replace the entire directory
-    Remove-Item -Path $targetDir -Recurse -Force
-    Copy-Item -Path $agentSrc -Destination $targetDir -Recurse -Force
-
-    # Restore preserved data
-    if (Test-Path $tempBackup) {
-        $backMemory  = Join-Path $tempBackup "memory"
-        $backSession = Join-Path $tempBackup "session"
-        if (Test-Path $backMemory) {
-            Remove-Item -Path (Join-Path $targetDir "memory") -Recurse -Force -ErrorAction SilentlyContinue
-            Copy-Item -Path $backMemory -Destination (Join-Path $targetDir "memory") -Recurse -Force
-        }
-        if (Test-Path $backSession) {
-            Remove-Item -Path (Join-Path $targetDir "session") -Recurse -Force -ErrorAction SilentlyContinue
-            Copy-Item -Path $backSession -Destination (Join-Path $targetDir "session") -Recurse -Force
-        }
-        Remove-Item -Path $tempBackup -Recurse -Force
-    }
+    
+    Copy-Item -Path "$agentSrc\*" -Destination $targetDir -Recurse -Force
 } else {
-    Copy-Item -Path $agentSrc -Destination $targetDir -Recurse -Force
+    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+    Copy-Item -Path "$agentSrc\*" -Destination $targetDir -Recurse -Force
 }
 Write-Ok ".godot-claude/ installed"
 
@@ -283,6 +257,17 @@ Write-Ok ".godot-claude/ installed"
 Write-Step "Installing CLAUDE.md -> .godot-claude/"
 Copy-Item -Path $claudeSrc -Destination (Join-Path $targetDir "CLAUDE.md") -Force
 Write-Ok "Godot agent instructions installed"
+
+# Install addons
+if (Test-Path $addonsSrc) {
+    Write-Step "Installing addons/ -> project root"
+    $projectAddons = Join-Path $ProjectPath "addons"
+    if (-not (Test-Path $projectAddons)) {
+        New-Item -ItemType Directory -Path $projectAddons -Force | Out-Null
+    }
+    Copy-Item -Path "$addonsSrc\*" -Destination $projectAddons -Recurse -Force
+    Write-Ok "Godot plugin (addons/) installed"
+}
 
 # If no project CLAUDE.md exists, create a minimal one
 $claudeDest = Join-Path $ProjectPath "CLAUDE.md"
