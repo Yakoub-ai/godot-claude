@@ -86,3 +86,77 @@ After downloading assets:
 5. attach_script("Player", "res://scripts/characters/player.gd")
 6. play_scene → verify sprites display correctly
 ```
+
+---
+
+## Art Direction Prompt Templates
+
+When generating assets, include specific art direction in the `description` parameter:
+
+**Characters:**
+> "16-bit SNES-era warrior character, 5-color palette (dark blue, light blue, gold, white, black), 32x32 pixel density, front-facing idle pose"
+
+**Tilesets:**
+> "Forest tileset with grass, dirt, stone surfaces. Auto-tile compatible edges. Mossy details on stone. Earthy green-brown palette."
+
+**Props:**
+> "Medieval tavern interior props: wooden table, barrel, candle, bookshelf. Consistent warm lighting. 16x16 base grid."
+
+**Backgrounds:**
+> "3-layer parallax mountain landscape. Layer 1: distant snow peaks (muted blue). Layer 2: pine forest mid-ground. Layer 3: rocky foreground path. Sunset mood."
+
+---
+
+## Asset Categorization
+
+Match asset types to the correct PixelLab tools:
+
+| Category | Create Tool | Follow-up | Notes |
+|----------|------------|-----------|-------|
+| Characters | `create_character` | `animate_character` | Generate base sprite first, then animations |
+| Tilesets | `create_sidescroller_tileset` or `create_topdown_tileset` | — | Match to camera perspective |
+| Props | `create_map_object` | — | Use standard tile-aligned dimensions |
+| Backgrounds | `create_map_object` | — | Use larger dimensions (320x180, 640x360) |
+
+---
+
+## ASSETS.md Integration
+
+After generating assets, maintain an `ASSETS.md` manifest in the project root for tracking all generated art. Format:
+
+```markdown
+# Asset Manifest
+
+## Characters
+| Name | Description | Size | Path |
+|------|------------|------|------|
+| Player Knight | Blue-armored knight, 5-color palette | 32x32 | res://assets/characters/knight/ |
+| Slime Enemy | Green bouncing slime | 16x16 | res://assets/characters/slime/ |
+
+## Tilesets
+| Name | Description | Size | Path |
+|------|------------|------|------|
+| Forest Ground | Grass/dirt/stone auto-tile set | 16x16 | res://assets/tilesets/forest/ |
+
+## Props
+| Name | Description | Size | Path |
+|------|------------|------|------|
+| Wooden Chest | Openable treasure chest | 16x16 | res://assets/props/chest/ |
+
+## Backgrounds
+| Name | Description | Size | Path |
+|------|------------|------|------|
+| Mountain Parallax | 3-layer sunset mountains | 320x180 | res://assets/backgrounds/mountain/ |
+```
+
+Update this file every time new assets are generated. The agent should read it before generating to avoid duplicates.
+
+---
+
+## Async Polling Best Practices
+
+- **Poll interval:** Every 10-15 seconds. Do NOT poll faster — it wastes API calls and may rate-limit.
+- **Parallel generation:** Launch multiple `create_*` calls in parallel, then poll all job IDs in a round-robin loop.
+- **Handle failures:** If status returns `"failed"`, retry with adjusted params (simplify description, change dimensions). Log the failure reason.
+- **Save immediately:** When a job completes, save the result to `res://` paths right away. Do not batch saves — a crash loses unsaved results.
+- **Track job IDs:** Keep a local list of `{job_id, asset_name, tool_type}` to correlate poll results with intended assets.

@@ -118,3 +118,22 @@ var bodies: Array[Node2D] = area.get_overlapping_bodies()
 if bodies.size() > 0 and bodies[0] is CharacterBody2D:
     var body: CharacterBody2D = bodies[0] as CharacterBody2D
 ```
+
+---
+
+## Godot Engine Quirks
+
+These are not bugs — they are engine behaviors that silently cause incorrect results unless you know the workaround.
+
+| Quirk | Workaround |
+|-------|-----------|
+| MultiMeshInstance3D loses mesh after pack+save | Use individual instances instead |
+| `_ready()` skipped in `_initialize()` | Call init methods manually after `add_child()` |
+| Camera2D has no `current` property | Use `make_current()` after node is in tree |
+| `--write-movie` frame 0 renders before `_process()` | Pre-position camera in `_initialize()` |
+| Collision bitmask vs UI index confusion | Layer 1=1, Layer 2=2, Layer 3=4 (powers of 2) |
+| GLB `material_override` doesn't serialize | Use procedural ArrayMesh for custom materials |
+| `_process()` in SceneTree scripts returns bool | Must be `func _process(delta: float) -> bool:` |
+| `await` advances movie frame counter | Use frame counter in `_physics_process()` instead |
+| Items spawned in active Area2D get signal same frame | Use spawn immunity timer (~0.8s) |
+| Collision state can't change in callbacks | Use `set_deferred("disabled", false)` |

@@ -92,6 +92,19 @@ These files live in `.godot-claude/` inside the user's project. **Never load mor
 | `.godot-claude/ref/gdd-workflow.md` | Interactive game creation stages | When user says "start new game" or asks for GDD |
 | `.godot-claude/ref/docs-index.md` | Godot docs MCP path patterns | When looking up Godot documentation |
 
+### Skills (Loaded via Skill tool)
+| Skill | Purpose | When to Use |
+|-------|---------|-------------|
+| `.godot-claude/skills/godogen/SKILL.md` | Game generation orchestrator | "make a game", "generate game", "godogen" |
+| `.godot-claude/skills/godot-task/SKILL.md` | Single task executor | Called by godogen per task |
+
+### Tools
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `.godot-claude/tools/rembg_matting.py` | Background removal for sprites | When PixelLab output needs transparency |
+| `.godot-claude/tools/spritesheet_slice.py` | Process sprite sheets | When working with sprite sheet assets |
+| `.godot-claude/tools/ensure_doc_api.sh` | Generate offline Godot API docs | One-time setup for offline doc fallback |
+
 ### Project Memory (megamemory knowledge graph)
 
 The agent uses **megamemory** (SQLite-backed knowledge graph) for persistent project memory. This replaces flat markdown memory files.
@@ -184,6 +197,38 @@ When returning to a project after time away:
 
 ---
 
+## Game Generation Pipeline
+
+**Commands:** "generate game", "make a game", "build a game", "godogen" → triggers the godogen orchestrator skill
+
+### For New Projects
+1. GDD workflow (interactive) → PLAN.md + STRUCTURE.md + ASSETS.md
+2. PixelLab generates all pixel art assets
+3. Scene builders create .tscn files (MCP tools preferred, headless fallback)
+4. Runtime scripts implement game logic
+5. Visual QA verifies each task via screenshots (Claude vision)
+6. Each task tracked as GSD phase
+
+### For Existing Projects
+1. "add [feature]" or "update [system]" → reads project state via megamemory + MCP
+2. Generates incremental PLAN.md
+3. Preserves existing scenes/scripts
+4. New features integrate with existing architecture
+
+### Skills
+| Skill | Purpose | Trigger |
+|-------|---------|---------|
+| `godogen` | Orchestrate full game pipeline | "make a game", "generate game" |
+| `godot-task` | Execute single development task | Called by godogen per task |
+
+### Asset Pipeline (Pixel Art Only)
+All assets generated via PixelLab MCP:
+- Characters: `create_character` → `animate_character`
+- Tilesets: `create_sidescroller_tileset` / `create_topdown_tileset`
+- Props: `create_map_object`
+
+---
+
 ## Behavior Rules
 
 1. **Be direct.** No filler. State what you're doing and why.
@@ -207,6 +252,8 @@ Tell the user about these on first interaction:
 - **"what's done"** → `megamemory:understand("completed features and systems")`
 - **"optimize"** → Runs performance profiling workflow
 - **"fix errors"** → Enters error detection and fixing loop
+- **"make a game"** or **"generate game"** → godogen pipeline → full autonomous game generation
+- **"add [feature]"** → incremental godogen → adds feature to existing project
 
 ---
 

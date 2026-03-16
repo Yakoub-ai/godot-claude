@@ -219,3 +219,159 @@ Then create `.tres` files in the editor for each weapon variant.
 - Stretch mode: **viewport** (Project → Display → Window → Stretch)
 - Sprites face **East** by default, use `flip_h` for West
 - Use `AnimatedSprite2D` + `SpriteFrames` for frame-by-frame animation
+
+---
+
+## Type Inference Gotchas
+
+`:=` infers the type from the right-hand side, but many built-in functions return `Variant`, causing type inference to fail or produce untyped variables.
+
+**Functions that return Variant (do NOT use `:=`):**
+- Math: `abs()`, `clamp()`, `min()`, `max()`, `floor()`, `ceil()`, `round()`
+- Interpolation: `lerp()`, `smoothstep()`, `move_toward()`
+
+```gdscript
+# ❌ BAD — x is Variant, defeats static typing
+var x := abs(y)
+var clamped := clamp(speed, 0.0, MAX_SPEED)
+
+# ✅ GOOD — explicit type annotation
+var x: float = abs(y)
+var clamped: float = clamp(speed, 0.0, MAX_SPEED)
+```
+
+**Other `:=` failures:**
+- `load().instantiate()` — returns untyped: use `var model = scene.instantiate()` (not `:=`)
+- Array/dictionary element access — `var item := inventory[0]` fails; use `var item: ItemType = inventory[0]`
+
+---
+
+## Scene Builder vs Runtime Script
+
+| Aspect | Scene Builder | Runtime Script |
+|--------|--------------|----------------|
+| Extends | `SceneTree` | `Node`, `CharacterBody2D`, etc. |
+| Runs when | Headless at build-time | When game plays |
+| Entry point | `_initialize()` | `_ready()`, `_process()`, `_physics_process()` |
+| `@onready` | NOT available | Available |
+| `preload()` | NOT available | Available |
+| Signal connections | NOT available | Connect in `_ready()` |
+| Must call | `quit()` when done | Nothing — lifecycle managed by engine |
+
+```gdscript
+# Scene builder example (headless generation)
+extends SceneTree
+
+func _initialize() -> void:
+    var root: Node3D = Node3D.new()
+    # ... build scene programmatically ...
+    var packed: PackedScene = PackedScene.new()
+    packed.pack(root)
+    ResourceSaver.save(packed, "res://scenes/generated.tscn")
+    quit()
+```
+
+---
+
+## Server API (500+ Objects)
+
+For managing 500+ objects (bullets, particles, debris) without creating nodes, use the physics server APIs directly. This avoids scene tree overhead entirely.
+
+```gdscript
+# PhysicsServer2D for 500+ objects without nodes (bullets, particles):
+var shape = PhysicsServer2D.circle_shape_create()
+var body = PhysicsServer2D.body_create()
+PhysicsServer2D.body_add_shape(body, shape)
+# Custom drawing for server-managed objects:
+func _draw() -> void:
+    for bullet in bullets:
+        draw_texture(bullet_tex, bullet.position)
+```
+
+When to use:
+- **500+ bullets** — PhysicsServer2D + custom `_draw()`
+- **500+ particles** — GPUParticles2D/3D or custom compute
+- **500+ foliage/debris** — MultiMeshInstance2D/3D (no physics needed)
+
+---
+
+## Camera Patterns
+
+```gdscript
+# Smooth follow with first-frame snap
+var _initialized: bool = false
+
+func _physics_process(delta: float) -> void:
+    var target_pos: Vector2 = target.global_position + offset
+    if not _initialized:
+        global_position = target_pos  # Snap on first frame
+        _initialized = true
+    else:
+        global_position = global_position.lerp(target_pos, smooth_speed * delta)
+```
+
+**Camera-relative input (3D):** Remove pitch from camera basis so forward is always horizontal:
+```gdscript
+var cam_basis: Basis = camera.global_transform.basis
+var forward: Vector3 = -cam_basis.z
+forward.y = 0.0
+forward = forward.normalized()
+var right: Vector3 = cam_basis.x
+right.y = 0.0
+right = right.normalized()
+var input_dir: Vector3 = forward * input.y + right * input.x
+```
+
+**Dynamic FOV for vehicles:**
+```gdscript
+camera.fov = lerp(camera.fov, base_fov + speed * fov_scale, 4.0 * delta)
+```
+
+---
+
+## Movement Feel
+
+**Walk/stop force asymmetry** — acceleration is faster than deceleration for responsive feel:
+```gdscript
+const ACCEL: float = 2000.0
+const FRICTION: float = 1200.0
+
+func _physics_process(delta: float) -> void:
+    var input_x: float = Input.get_axis("move_left", "move_right")
+    if abs(input_x) > 0.1:
+        velocity.x = move_toward(velocity.x, input_x * MAX_SPEED, ACCEL * delta)
+    else:
+        velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
+    velocity.x = clampf(velocity.x, -MAX_SPEED, MAX_SPEED)
+    move_and_slide()
+```
+
+**Analog input** — preserve analog magnitude for walk/run distinction:
+```gdscript
+var input_vec: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+var magnitude: float = minf(input_vec.length(), 1.0)
+var direction: Vector2 = input_vec.normalized()
+velocity = direction * magnitude * MAX_SPEED
+```
+
+---
+
+## Advanced Tween Patterns
+
+```gdscript
+# Parallel tweens — animate multiple properties simultaneously
+var tween: Tween = create_tween()
+tween.tween_property(sprite, "modulate:a", 0.0, 0.5)
+tween.parallel().tween_property(sprite, "scale", Vector2.ZERO, 0.5)
+tween.parallel().tween_property(sprite, "position:y", -50.0, 0.5).as_relative()
+
+# Method tween — call a method with interpolated values
+tween.tween_method(_set_health_bar, 1.0, 0.0, 1.5)
+
+# Relative motion — offset from current value
+tween.tween_property(node, "position", Vector2(0, -20), 0.3).as_relative()
+
+# Chained with callbacks
+tween.tween_property(node, "modulate:a", 0.0, 0.3)
+tween.tween_callback(node.queue_free)
+```

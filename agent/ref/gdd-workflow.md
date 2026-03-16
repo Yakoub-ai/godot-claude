@@ -6,7 +6,7 @@ Load this file when user says "start new game", "new project", or asks to create
 
 ---
 
-## Flow
+## For New Projects
 
 Ask one stage at a time. Offer defaults. User can say "use defaults" to skip any stage.
 
@@ -26,10 +26,10 @@ Ask:
 Auto-set from answers:
 | Style + Camera | Viewport | Stretch | Filter |
 |---------------|----------|---------|--------|
-| Pixel, side/top | 320×180 | viewport | Nearest |
-| Pixel, isometric | 640×360 | viewport | Nearest |
-| HD 2D | 1920×1080 | canvas_items | Linear |
-| 3D | 1920×1080 | canvas_items | Linear |
+| Pixel, side/top | 320x180 | viewport | Nearest |
+| Pixel, isometric | 640x360 | viewport | Nearest |
+| HD 2D | 1920x1080 | canvas_items | Linear |
+| 3D | 1920x1080 | canvas_items | Linear |
 
 ### Stage 3: Entities & Characters
 Ask:
@@ -64,7 +64,19 @@ Auto-generate based on genre:
 | Top-down RPG | move_up/down/left/right, interact, menu, attack |
 
 ### Stage 7: Asset Plan
-Compile from entity specs — list all PixelLab tasks needed.
+Compile from entity specs. Plan specific PixelLab generations with prompt templates:
+
+For each character:
+- `create_character` with art-directed description (palette, density, style era)
+- List animations to generate via `animate_character`
+
+For each tileset:
+- `create_sidescroller_tileset` or `create_topdown_tileset`
+- Include connectivity and surface type details in description
+
+For props and backgrounds:
+- `create_map_object` with dimensions matching the viewport scale
+- Backgrounds: specify parallax layer count, mood, time of day
 
 ### Stage 8: Performance Budget
 Set targets based on scope:
@@ -75,34 +87,130 @@ Set targets based on scope:
 | Large (100+) | Manager pattern | 100 (MultiMesh) | Yes |
 
 ### Stage 9: Phase Plan
-Create ordered build phases with acceptance criteria:
-```
-Phase 1: Core Movement (2-3 days)
-- Player scene, movement script, test level
-- Acceptance: Player can move and jump in test level
+Create ordered build phases in `.planning/ROADMAP.md`:
 
-Phase 2: Core Combat (2-3 days)
+```markdown
+# ROADMAP
+
+## Phase 1: Core Movement
+- Player scene, movement script, test level
+- Acceptance: Player can move in test level
+- Est: 2-3 sessions
+
+## Phase 2: Core Combat
 - Weapon system, enemy AI, damage system
-- Acceptance: Player can attack enemies, enemies can attack back
-...
+- Acceptance: Player and enemies can deal damage
+- Est: 2-3 sessions
+
+## Phase 3: Level Design
+- First complete level with tilesets and layout
+- Acceptance: Playable level from start to end
+- Est: 2-3 sessions
+
+## Phase 4: Game Loop
+- Menus, win/lose conditions, progression
+- Acceptance: Complete play loop from menu to game over
+- Est: 2-3 sessions
+
+## Phase 5: Polish
+- Audio, VFX, UI refinement, bug fixes
+- Acceptance: Release-ready quality
+- Est: 2-3 sessions
 ```
+
+Customize phases to the specific game. Each phase should be completable in 2-3 focused sessions.
 
 ---
 
-## Output
+## For Existing Projects
 
-After all stages, generate:
+When the user has an existing project instead of starting from scratch:
 
-1. **megamemory knowledge graph** — Record all GDD data as structured concepts:
+1. Call `megamemory:list_roots` — check for existing knowledge graph
+2. If megamemory has concepts: `megamemory:understand("project overview and current state")`
+3. Analyze existing project structure via MCP: `get_project_info`, `list_scenes`, `list_scripts`
+4. Identify what's already built vs. what's missing
+5. Create an incremental plan that builds on existing work
+6. Skip stages 1-2 (already decided), focus on missing systems and content
+7. Generate ROADMAP.md with remaining phases only
+
+---
+
+## Output — Three Planning Documents
+
+After all stages are complete, generate three files:
+
+### 1. `.planning/PLAN.md`
+Complete game design document with all decisions from stages 1-8:
+- Concept, genre, art style, camera
+- Technical setup and performance budget
+- Entity list with abilities and behaviors
+- System descriptions (combat, progression, spawning)
+- Input map
+
+### 2. `.planning/STRUCTURE.md`
+Project folder structure and scene hierarchy:
+```
+res://
+├── scenes/
+│   ├── characters/
+│   ├── levels/
+│   ├── ui/
+│   └── systems/
+├── scripts/
+│   ├── characters/
+│   ├── systems/
+│   └── ui/
+├── assets/
+│   ├── characters/
+│   ├── tilesets/
+│   ├── props/
+│   └── audio/
+└── resources/
+```
+
+### 3. `ASSETS.md`
+Asset generation manifest (see `.godot-claude/ref/pixellab.md` for format):
+- All characters with PixelLab prompts and target sizes
+- All tilesets with style descriptions
+- All props and backgrounds
+- Tracks generation status: pending / generated / integrated
+
+### 4. `.planning/ROADMAP.md`
+Phase plan from Stage 9 with acceptance criteria.
+
+---
+
+## After GDD — Enter Build Pipeline
+
+Once all documents are generated:
+
+1. **Record to megamemory:**
    - `megamemory:create_concept(name="[Game Name]", kind="project", summary="...")`
    - Child concepts for: `tech_stack`, `entities`, `systems`, `art_plan`, `performance_budget`
-   - Link related concepts (e.g., entities → systems that use them)
+   - Link related concepts (entities → systems that use them)
 
-2. **GSD planning files** — Set up phase tracking:
-   - Create `.planning/PROJECT.md` with game overview + phase summary
-   - Create `.planning/ROADMAP.md` with numbered phases and acceptance criteria
-   - Each phase maps to GDD Stage 9 phases
+2. **Create project scaffold** via godot-engine-mcp:
+   - Set project settings (viewport, stretch, filter)
+   - Create folder structure from STRUCTURE.md
+   - Set up input map from Stage 6
 
-3. **Project scaffold** — Create folder structure via godot-engine-mcp
+3. **Begin Phase 1** — start building immediately:
+   - Read ROADMAP.md Phase 1 acceptance criteria
+   - Generate required assets from ASSETS.md (PixelLab)
+   - Implement scenes and scripts
+   - Validate and test
+   - Update megamemory with completed work
 
-4. **Begin Phase 1** — Start implementation via `/gsd:execute-phase` or direct development
+---
+
+## Direct Pipeline Entry
+
+If the user already has planning docs (PLAN.md, STRUCTURE.md, ASSETS.md, ROADMAP.md), skip the Q&A stages entirely:
+
+1. Read all planning docs
+2. Record to megamemory if not already there
+3. Determine current phase from ROADMAP.md
+4. Begin implementation directly
+
+This supports workflows where the GDD was written outside the agent or in a previous session.

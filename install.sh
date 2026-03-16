@@ -262,6 +262,37 @@ if [ -d "$ADDONS_SRC" ]; then
     ok "Godot plugin (addons/) installed"
 fi
 
+# Check PixelLab API key
+if [ -z "${PIXELLAB_API_KEY-}" ]; then
+    echo ""
+    warn "PIXELLAB_API_KEY not set — game generation pipeline (godogen) won't be able to create assets."
+    echo -e "    Get a key: ${CYAN}https://pixellab.ai/${NC}"
+    echo -e "    Set it:    ${CYAN}export PIXELLAB_API_KEY=pk_...${NC}"
+    echo ""
+fi
+
+# Optional: generate offline Godot API docs for godot-task skill
+DOC_API_SCRIPT="$TARGET_DIR/tools/ensure_doc_api.sh"
+if [ -f "$DOC_API_SCRIPT" ] && command -v python3 &>/dev/null && command -v git &>/dev/null; then
+    if [ ! -d "$TARGET_DIR/skills/godot-task/doc_api" ] || [ ! -f "$TARGET_DIR/skills/godot-task/doc_api/_common.md" ]; then
+        echo ""
+        echo -e "  ${BOLD}Offline Godot API docs (one-time)${NC}"
+        echo -e "  Generates per-class markdown API reference from Godot source."
+        echo -e "  Used as offline fallback when MCP docs are unavailable."
+        echo ""
+        read -rp "  Generate offline API docs now? [y/N]: " GEN_DOCS
+        echo ""
+        if [[ "$GEN_DOCS" =~ ^[Yy] ]]; then
+            step "Generating offline Godot API docs..."
+            if bash "$DOC_API_SCRIPT" 2>&1; then
+                ok "Offline API docs generated"
+            else
+                warn "Failed to generate API docs — godot-task will use MCP docs instead"
+            fi
+        fi
+    fi
+fi
+
 # If no project CLAUDE.md exists, create a minimal one
 if [ ! -f "$PROJECT_PATH/CLAUDE.md" ]; then
     step "Creating project CLAUDE.md"
@@ -325,8 +356,32 @@ if [ "$SKIP_MCP" = false ] && [ ! -f "$MCP_FILE" ]; then
         fi
     fi
 
-    # Generate .mcp.json
-    if [ "$DOCS_AVAILABLE" = true ]; then
+    # Generate .mcp.json based on available services
+    if [ "$DOCS_AVAILABLE" = true ] && [ -n "${PIXELLAB_API_KEY-}" ]; then
+        cat > "$MCP_FILE" << EOF
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$SOURCE_DIR/server/build/index.js"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "godot-mcp-docs": {
+      "command": "python3",
+      "args": ["$DOCS_PATH/main.py"]
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer \${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
+EOF
+        ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + pixellab)"
+    elif [ "$DOCS_AVAILABLE" = true ]; then
         cat > "$MCP_FILE" << EOF
 {
   "mcpServers": {
@@ -346,8 +401,27 @@ EOF
             ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs)"
         else
             ok ".mcp.json created (docs server configured but docs not built yet)"
-            warn "Run later: cd $DOCS_PATH && python3 docs_converter/godot_docs_converter.py && find docs -type f | sort > docs/docs_tree.txt"
         fi
+    elif [ -n "${PIXELLAB_API_KEY-}" ]; then
+        cat > "$MCP_FILE" << EOF
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$SOURCE_DIR/server/build/index.js"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer \${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
+EOF
+        ok ".mcp.json created (godot-engine-mcp + pixellab)"
     else
         cat > "$MCP_FILE" << EOF
 {
@@ -360,7 +434,7 @@ EOF
   }
 }
 EOF
-        ok ".mcp.json created (godot-engine-mcp only — agent will use context7 for docs)"
+        ok ".mcp.json created (godot-engine-mcp only)"
     fi
 elif [ -f "$MCP_FILE" ]; then
     ok ".mcp.json already exists — skipped"
@@ -424,6 +498,10 @@ echo -e "  ${BOLD}First commands:${NC}"
 echo -e "    ${CYAN}start new game${NC}                 # GDD workflow → full project scaffold"
 echo -e "    ${CYAN}continue${NC}                       # Resume last session"
 echo -e "    ${CYAN}status${NC}                         # Project state"
+echo ""
+echo -e "  ${BOLD}Game generation:${NC}"
+echo -e "    ${CYAN}make a game${NC}                    # Describe a game → get a playable pixel art game"
+echo -e "    ${CYAN}add enemies${NC}                    # Add features to existing project"
 echo ""
 echo -e "  ${BOLD}Model routing:${NC}"
 echo -e "    Architecture / GDD:    ${CYAN}claude --model opus${NC}"

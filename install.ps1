@@ -269,6 +269,15 @@ if (Test-Path $addonsSrc) {
     Write-Ok "Godot plugin (addons/) installed"
 }
 
+# Check PixelLab API key
+if (-not $env:PIXELLAB_API_KEY) {
+    Write-Host ""
+    Write-Warn "PIXELLAB_API_KEY not set -- game generation pipeline (godogen) won't be able to create assets."
+    Write-Host "    Get a key: $($CYAN)https://pixellab.ai/$($RST)"
+    Write-Host "    Set it:    $($CYAN)`$env:PIXELLAB_API_KEY = 'pk_...'$($RST)"
+    Write-Host ""
+}
+
 # If no project CLAUDE.md exists, create a minimal one
 $claudeDest = Join-Path $ProjectPath "CLAUDE.md"
 if (-not (Test-Path $claudeDest)) {
@@ -338,11 +347,37 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
         }
     }
 
-    # Generate .mcp.json
+    # Generate .mcp.json based on available services
     $serverPath = (Join-Path $sourceDir "server\build\index.js").Replace('\', '/')
     $docsMainPath = (Join-Path $docsPath "main.py").Replace('\', '/')
+    $hasPixelLab = [bool]$env:PIXELLAB_API_KEY
 
-    if ($docsAvailable) {
+    if ($docsAvailable -and $hasPixelLab) {
+        $mcpContent = @"
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$serverPath"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "godot-mcp-docs": {
+      "command": "$pythonCmd",
+      "args": ["$docsMainPath"]
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer `${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
+"@
+        $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
+        Write-Ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + pixellab)"
+    } elseif ($docsAvailable) {
         $mcpContent = @"
 {
   "mcpServers": {
@@ -364,6 +399,27 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
         } else {
             Write-Ok ".mcp.json created (docs server configured but docs not built yet)"
         }
+    } elseif ($hasPixelLab) {
+        $mcpContent = @"
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$serverPath"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer `${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
+"@
+        $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
+        Write-Ok ".mcp.json created (godot-engine-mcp + pixellab)"
     } else {
         $mcpContent = @"
 {
@@ -429,6 +485,8 @@ Write-Host ""
 Write-Host "  $($BOLD)What was installed:$($RST)"
 Write-Host "    .godot-claude/CLAUDE.md  - Agent brain (Claude Code reads this automatically)"
 Write-Host "    .godot-claude/ref/       - 7 reference files (loaded on demand, not all at once)"
+Write-Host "    .godot-claude/skills/    - Game generation skills (godogen pipeline)"
+Write-Host "    .godot-claude/tools/     - Python tools (sprite processing, doc conversion)"
 Write-Host "    .godot-claude/session/   - Session state (survives /clear)"
 Write-Host "    .mcp.json                - MCP server configuration"
 Write-Host ""
@@ -440,6 +498,10 @@ Write-Host "  $($BOLD)First commands to try:$($RST)"
 Write-Host "    $($CYAN)start new game$($RST)                 # Interactive GDD then full project scaffold"
 Write-Host "    $($CYAN)continue$($RST)                       # Resume from last session"
 Write-Host "    $($CYAN)status$($RST)                         # See project state"
+Write-Host ""
+Write-Host "  $($BOLD)Game generation:$($RST)"
+Write-Host "    $($CYAN)make a game$($RST)                    # Describe a game -> get a playable pixel art game"
+Write-Host "    $($CYAN)add enemies$($RST)                    # Add features to existing project"
 Write-Host ""
 Write-Host "  $($BOLD)Use the right model for the job:$($RST)"
 Write-Host "    Architecture / GDD:    $($CYAN)claude --model opus$($RST)"
