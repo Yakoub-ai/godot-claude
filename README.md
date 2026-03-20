@@ -231,6 +231,30 @@ Different tasks benefit from different models. The agent will suggest switching 
 
 ---
 
+## Autoresearch Framework (Self-Improving Agent)
+
+`godot-claude` ships with a `Karpathy`-inspired autoresearch system. This framework isolates the agent in a test sandbox and grades its game generation logic against a fitness function, enabling you to optimize the agent's prompts and orchestration skills overnight.
+
+### How to run the Autoresearch Evaluation:
+
+1. **Prepare the sandbox:**
+   ```bash
+   cd godot-claude
+   python3 autoresearch/prepare.py
+   ```
+   *This generates a clean Godot sandbox at `/tmp/godot_autoresearch_sandbox/` and automatically installs the MCP plugins into it.*
+
+2. **Run the training loop:**
+   ```bash
+   python3 autoresearch/train.py
+   ```
+   *This initiates an automated headless Claude session that will attempt to build an entire game within a strict 5-minute timeout. It evaluates success (Visual QA / Error Count / Completion Status) and prints a fitness SCORE.*
+
+3. **Provide optimization logic:** 
+   Edit `autoresearch/program.md` to instruct the meta-agent on what files to rewrite (e.g., `agent/skills/godogen/decomposer.md`) to minimize errors and improve the codebase autonomously.
+
+---
+
 ## Tool Categories
 
 The godot-engine-mcp server organizes its 209 tools into 23 categories. Four core categories are always loaded. The remaining 19 are loaded on demand via `enable_category` and automatically unloaded after 10 minutes of inactivity.
