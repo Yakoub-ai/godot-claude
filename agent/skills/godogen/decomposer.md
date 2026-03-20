@@ -9,7 +9,6 @@ Decompose a game into a development plan — a small number of large tasks, each
 3. **Identify algorithmic risks** — filter for features requiring complex math, procedural generation, custom shaders, or novel physics. These are the only candidates for isolation.
 4. **Bundle everything else** — group all standard game logic into large, consolidated tasks.
 5. **Write `PLAN.md`** — the task DAG with verification criteria.
-6. **Map tasks to GSD phases** — each task becomes a phase in `.planning/ROADMAP.md` for tracking.
 
 The task executor is a highly capable LLM agent that thrives on broad context. It can implement an entire standard game in one pass. Orchestrating many small tasks creates real costs: merge friction between tasks, loss of holistic context, overfocus on minor features, and compounding integration failures. Each additional task boundary is a place where things break.
 
@@ -91,10 +90,10 @@ Produce `PLAN.md`:
 1. Visual architecture — arena grid, walls, destructible blocks, player and enemy sprites, all correctly animated and scaled.
 2. Core game loop — movement, bomb placement and detonation, chain reactions, enemy AI, health, HUD, win/lose conditions.
 
-**Platformer with procedural levels** (algorithmic risk: procedural generation): 3 tasks.
-1. Procedural level generation — connected platforms with working collision geometry, verified navigable.
-2. Player mechanics in generated levels — character controls tuned for generated platform spacing.
-3. Game completion — enemies, collectibles, scoring, HUD, game over conditions.
+**3D flight game through procedural canyons** (algorithmic risk: procedural canyon geometry): 3 tasks.
+1. Procedural canyon generation — narrow passages with working collision geometry, verified navigable.
+2. Flight mechanics in canyon — plane controls tuned for tight spaces within the generated canyon.
+3. Game completion — rings, scoring, HUD, game over conditions.
 
 **Tower defense with custom pathfinding** (algorithmic risk: pathfinding + dynamic tower placement interaction): 3 tasks.
 1. Pathfinding system — enemies follow paths, reroute when towers block, maintain spacing.
@@ -114,6 +113,27 @@ The Verify field describes what the task's goal looks like when achieved — the
 Reference these by name in task goals — the task executor knows how to implement them:
 spawn system, state machine, navigation/AI, HUD overlay, pause, turn-based combat, grid movement.
 
+## Mandatory Final Task: Presentation Video
+
+The last task in every plan is always a presentation video, just add it after everything else. It creates a ~30-second cinematic gameplay video as the final deliverable.
+
+```markdown
+## N. Presentation Video
+- **Depends on:** {all other tasks}
+- **Goal:** Create a ~30-second cinematic video showcasing the completed game.
+- **Requirements:**
+  - Write test/presentation.gd — a SceneTree script (extends SceneTree)
+  - Showcase representative gameplay via simulated input or scripted animations
+  - ~900 frames at 30 FPS (30 seconds)
+  - Use Video Capture from godot-capture (AVI via --write-movie, convert to MP4 with ffmpeg)
+  - Output: screenshots/presentation/gameplay.mp4
+  - **3D games:** smooth camera work (orbits, tracking shots, dolly moves), good lighting (DirectionalLight3D key + fill/rim), post-processing (glow/bloom, SSAO, SSR, ACES tonemapping, volumetric fog)
+  - **2D games:** camera pans and smooth scrolling, zoom transitions between overview and close-up, trigger representative gameplay sequences, tight viewport framing
+- **Verify:** A smooth MP4 video showing polished gameplay with no visual glitches.
+```
+
+Adapt the 3D/2D requirements based on the game's dimension — include only the relevant set.
+
 ## What NOT to Include
 
 - GDScript code or implementation details (task executor handles that)
@@ -121,4 +141,3 @@ spawn system, state machine, navigation/AI, HUD overlay, pause, turn-based comba
 - Micro-tasks for routine features (UI, simple collisions, input handling)
 - Untestable requirements (everything must be visually verifiable)
 - Artificial dependencies between independent systems
-- Presentation video task (pixel art games don't need GPU-dependent video capture)

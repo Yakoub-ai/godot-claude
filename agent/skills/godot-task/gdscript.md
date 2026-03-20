@@ -673,7 +673,7 @@ velocity.x = clamp(velocity.x, -MAX_SPEED, MAX_SPEED)
 horizontal_vel = horizontal_vel.lerp(target_vel, accel * delta)
 
 # Analog input (triggers, sticks):
-var throttle: float = Input.get_action_strength("accelerate")  # 0.0-1.0
+var throttle: float = Input.get_action_strength("accelerate")  # 0.0–1.0
 ```
 
 ## State Machine Pattern

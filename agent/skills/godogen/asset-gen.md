@@ -1,164 +1,219 @@
-# Asset Generator — PixelLab MCP
+# Asset Generator
 
-Generate pixel art assets via PixelLab MCP tools. All asset generation uses PixelLab exclusively — no other image generation service.
+Generate PNG images (Gemini) and GLB 3D models (Tripo3D) from text prompts.
 
-## PixelLab MCP Tool Reference
+## CLI Reference
 
-### Characters
+Tools live at `${CLAUDE_SKILL_DIR}/tools/`. Run from the project root.
 
-**Create character:**
-```
-create_character(
-  description: "a knight in silver armor with a blue cape, pixel art style",
-  width: 32,
-  height: 32,
-  style: "pixel_art"
-)
-→ Returns job_id
-→ Poll: get_character(job_id) every 10-15s until status: "complete"
-```
-
-**Animate character:**
-```
-animate_character(
-  job_id: "<character_job_id>",
-  animation_type: "walk",    # idle, walk, run, attack, death, jump, fall
-  frame_count: 6
-)
-→ Returns animation job_id
-→ Poll: get_character(animation_job_id) every 10-15s
-```
-
-### Tilesets
-
-**Sidescroller tileset** (for platformers):
-```
-create_sidescroller_tileset(
-  description: "forest ground with grass top, dirt middle, stone bottom, pixel art",
-  tile_size: 16
-)
-→ Returns job_id
-→ Poll: get_sidescroller_tileset(job_id) every 10-15s
-```
-
-**Top-down tileset** (for RPGs, roguelikes):
-```
-create_topdown_tileset(
-  description: "dungeon floor tiles with stone, water, lava, cracks, pixel art",
-  tile_size: 16
-)
-→ Returns job_id
-→ Poll: get_topdown_tileset(job_id) every 10-15s
-```
-
-### Props and Objects
-
-**Create map object:**
-```
-create_map_object(
-  description: "a wooden treasure chest, pixel art style, slightly open with gold gleaming",
-  width: 32,
-  height: 24,
-  style: "pixel_art"
-)
-→ Returns job_id
-→ Poll: get_map_object(job_id) every 10-15s
-```
-
-## Async Polling Pattern
-
-All PixelLab operations are async. Follow this pattern:
-
-```
-1. CALL create_* tool → get job_id
-2. WAIT 10-15 seconds
-3. CALL get_* tool with job_id
-   - If status: "processing" → go to step 2
-   - If status: "complete" → download/save result
-   - If status: "failed" → retry creation with adjusted params
-4. SAVE PNGs to project:
-   res://assets/characters/{name}/
-   res://assets/tilesets/{name}/
-   res://assets/props/{name}/
-   res://assets/backgrounds/{name}/
-```
-
-## Integration with Godot
-
-After downloading assets from PixelLab:
-
-**Characters → AnimatedSprite2D + SpriteFrames:**
-- Import sprite sheet PNG
-- Create SpriteFrames resource with animations (idle, walk, etc.)
-- Configure frame count, FPS, loop settings
-- Attach to AnimatedSprite2D node
-
-**Tilesets → TileSet resource:**
-- Import tileset PNG
-- Create TileSet with tile_size matching generation
-- Configure collision shapes, terrain connections
-- Apply to TileMapLayer
-
-**Props → Sprite2D:**
-- Import PNG directly
-- Use as Sprite2D texture
-- Add CollisionShape2D if interactive
-
-**Backgrounds → TextureRect or Sprite2D:**
-- Import PNG
-- For parallax: use ParallaxBackground + ParallaxLayer
-- For static: TextureRect in CanvasLayer behind game
-
-## Sprite Size Guide
-
-| Viewport | Character | Tiles | Props | Background |
-|----------|-----------|-------|-------|------------|
-| 320×180 | 16-24 px | 16 px | 8-16 px | 320×180 px |
-| 640×360 | 32-48 px | 32 px | 16-32 px | 640×360 px |
-| 1280×720 | 64-96 px | 64 px | 32-64 px | 1280×720 px |
-
-## Animation Types
-
-| Type | Typical Frames | Use For |
-|------|---------------|---------|
-| idle | 4-6 | Standing still, breathing |
-| walk | 6-8 | Movement |
-| run | 6-8 | Fast movement |
-| attack | 4-6 | Melee/ranged attack |
-| death | 4-6 | Death animation |
-| jump | 3-4 | Jump arc (platformer) |
-| fall | 2-3 | Falling (platformer) |
-
-## Background Removal
-
-If PixelLab outputs assets with backgrounds that need transparency, use the bundled background removal tool:
+### Generate image (5-10 cents)
 
 ```bash
-python3 .godot-claude/tools/rembg_matting.py input.png -o output.png
+python3 ${CLAUDE_SKILL_DIR}/tools/asset_gen.py image \
+  --prompt "the full prompt" -o assets/img/car.png
 ```
 
-Dependencies: `pip install -r .godot-claude/tools/requirements.txt`
+`--size` (default `1K`): `512` (5c), `1K` (7c), `2K` (10c)
+`--aspect-ratio` (default `1:1`): `1:1`, `1:4`, `1:8`, `2:3`, `3:2`, `3:4`, `4:1`, `4:3`, `4:5`, `5:4`, `8:1`, `9:16`, `16:9`, `21:9`
 
-## Sprite Sheet Processing
+Typical combos: `--size 2K --aspect-ratio 16:9` (landscape bg), `--size 2K --aspect-ratio 9:16` (portrait), `--size 1K` (textures, sprites, 3D refs).
 
-For manually created sprite sheets that need processing:
+### Remove background
+
+Uses rembg mask + alpha matting. Handles semi-transparent objects, fine edges, hair, glass, particles. Auto-detects the background color from corner pixels. Dependencies in `${CLAUDE_SKILL_DIR}/tools/requirements.txt`.
+
+If rembg is not installed:
+```bash
+pip install rembg[gpu,cli]   # use rembg[cpu,cli] if no GPU
+rembg d isnet-anime          # download model
+```
 
 ```bash
-# Keep background, crop grid lines
-python3 .godot-claude/tools/spritesheet_slice.py keep-bg input.png -o output.png
-
-# Remove background from each frame
-python3 .godot-claude/tools/spritesheet_slice.py clean-bg input.png -o output.png
-
-# Split into individual PNGs
-python3 .godot-claude/tools/spritesheet_slice.py split-clean input.png -o output_dir/ \
-  --names "frame1,frame2,frame3,..."
+python3 ${CLAUDE_SKILL_DIR}/tools/rembg_matting.py \
+  assets/img/car.png -o assets/img/car_nobg.png
 ```
+
+### Generate sprite sheet (7 cents)
+
+Always 4x4 = exactly 16 cells. All 16 must be used — no more, no less. Template and grid instructions are injected automatically; you provide only the subject and BG color.
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/tools/asset_gen.py spritesheet \
+  --prompt "Animation: a knight swinging a sword" \
+  --bg "#4A6741" -o assets/img/knight_swing_raw.png
+```
+
+- `--prompt` — subject only. Don't specify frame count (system prompt handles it). For animations describe the action; for collections number each item 1-16.
+- `--bg` — background color hex (default: `#00FF00`). See BG color strategy below.
+
+### Process sprite sheet
+
+Crops red grid lines. Choose mode based on use case:
+
+**Animation frames** → output single sheet for `Sprite2D` (`hframes=4, vframes=4`):
+```bash
+# Keep background (textures, solid-color game BG)
+python3 ${CLAUDE_SKILL_DIR}/tools/spritesheet_slice.py keep-bg \
+  assets/img/knight_raw.png -o assets/img/knight.png
+
+# Remove background (sprites, characters — preferred)
+python3 ${CLAUDE_SKILL_DIR}/tools/spritesheet_slice.py clean-bg \
+  assets/img/knight_raw.png -o assets/img/knight.png
+```
+
+**Collection of distinct objects** (items, icons, props) → split into 16 individual PNGs:
+```bash
+# Split with background kept
+python3 ${CLAUDE_SKILL_DIR}/tools/spritesheet_slice.py split-bg \
+  assets/img/items_raw.png -o assets/img/items/
+
+# Split with background removed (preferred for in-game objects)
+python3 ${CLAUDE_SKILL_DIR}/tools/spritesheet_slice.py split-clean \
+  assets/img/items_raw.png -o assets/img/items/ \
+  --names "apple,banana,orange,grape,cherry,lemon,pear,plum,peach,melon,kiwi,mango,berry,fig,lime,coconut"
+```
+
+For split modes, `-o` is the output **directory**. `--names` provides filenames (without `.png`) for each cell left-to-right, top-to-bottom. Without `--names`, files are numbered `01.png`..`16.png`.
+
+### Convert image to GLB (30-60 cents)
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/tools/asset_gen.py glb \
+  --image assets/img/car.png --quality medium -o assets/glb/car.glb
+```
+
+### Set budget
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/tools/asset_gen.py set_budget 500
+```
+
+Sets the generation budget to 500 cents. All subsequent generations check remaining budget and reject if insufficient. CRITICAL: only call once at the start, and only when the user explicitly provides a budget.
+
+### Output format
+
+JSON to stdout: `{"ok": true, "path": "assets/img/car.png", "cost_cents": 7}`
+
+On failure: `{"ok": false, "error": "...", "cost_cents": 0}`
+
+Progress goes to stderr.
+
+## Cost Table
+
+| Operation | Preset | Cost | Notes |
+|-----------|--------|------|-------|
+| Image | --size 512 | 5 cents | Configurable aspect ratio |
+| Image | --size 1K | 7 cents | Default. Configurable aspect ratio |
+| Image | --size 2K | 10 cents | HQ objects, textures, backgrounds |
+| Image | --size 4K | 15 cents | Large game maps, panoramic backgrounds |
+| Sprite sheet | — | 7 cents | 1K, 4x4 grid (16 cells, 256x256 each) |
+| GLB | medium | 30 cents | 20k faces, good default |
+| GLB | lowpoly | 40 cents | 5k faces, smart topology |
+| GLB | high | 40 cents | Adaptive faces, detailed textures (+10c) |
+| GLB | ultra | 60 cents | Detailed textures + geometry (+10c +20c) |
+
+A full 3D asset (image + GLB) costs 37 cents at medium quality. A texture is 7 cents. A sprite sheet is 7 cents for 16 frames/items. A 2K image is 10 cents. A 4K image is 15 cents.
+
+## Image Resolution
+
+Use the full generation resolution — don't downscale for aesthetic reasons.
+- Default (`1K`): textures, sprites, 3D references
+- `2K`: HQ objects/textures, backgrounds, title screens
+- `4K`: large game maps (zoom into regions instead of multiple smaller images), panoramic backgrounds
+- `512`: quick tests, low-cost assets
+- Sprite sheets: 1024x1024 total → **256x256 per cell** (after grid crop ~248x248)
+
+## What to Generate — Cheatsheet
+
+**CRITICAL: Never prompt for "transparent background" — the generator draws a checkerboard. Always use a solid color background, then remove with `rembg_matting.py`.**
+
+### Background / large scenic image (10c)
+
+Title screens, sky panoramas, parallax layers, environmental art. Best place for art direction language.
+
+```
+{description in the art style}. {composition instructions}.
+```
+`image --prompt "..." --size 2K --aspect-ratio 16:9 -o path.png`
+
+No post-processing — use as-is.
+
+### Texture (7c)
+
+Tileable surfaces: ground, walls, floors, UI panels.
+
+```
+{name}, {description}. Top-down view, uniform lighting, no shadows, seamless tileable texture, suitable for game engine tiling, clean edges.
+```
+`image --prompt "..." -o path.png`
+
+No background removal — the entire image IS the texture.
+
+### Single object / sprite (7c)
+
+**With background** (object on a known scene background):
+```
+{name}, {description}.
+```
+
+**Transparent** (characters, props, icons, UI elements) — **CRITICAL: prompt must include a solid flat background color.** Without it, the generator draws a detailed/noisy background that rembg cannot cleanly separate:
+```
+{name}, {description}. Centered on a solid {bg_color} background.
+```
+Then: `rembg_matting.py input.png -o output.png`
+
+### 3D model reference (7c) + GLB (30-60c)
+
+```
+3D model reference of {name}. {description}. 3/4 front elevated camera angle, solid white background, soft diffused studio lighting, matte material finish, single centered subject, no shadows on background. Any windows or glass should be solid tinted (opaque).
+```
+Then: `glb --image ... -o ...` — do NOT remove the background; Tripo3D needs the solid white bg for clean separation.
+
+Key: 3/4 front elevated angle, solid white/gray bg, matte finish (no reflections), opaque glass, single centered subject.
+
+### Animation → Spritesheet (7c)
+
+16 cells in a 4x4 grid. Flexible layouts:
+- 16 frames of one subject (walk cycle, attack, bounce)
+- 4 objects x 4 frames each (4 enemies x 4 walk frames)
+- 2 objects x 8 frames (split across rows)
+
+The longer/more complex the animation, the more likely it breaks — keep motions simple.
+
+```
+Animation: a slime bouncing
+```
+
+Post-processing:
+- **Transparent sprites** (preferred): `clean-bg` → single sheet for `Sprite2D` (`hframes=4, vframes=4`)
+- **With background:** `keep-bg` → single sheet
+
+### Asset kit (16 objects, consistent style) → Spritesheet (7c)
+
+Generate 16 small objects that share the same visual style (items, icons, props, tiles). Cheaper and more consistent than 16 individual calls (7c vs 112c).
+
+```
+Items: 1: red apple 2: banana 3: orange 4: grape 5: cherry ...
+```
+
+Number every item 1-16. Don't specify grid layout — system prompt handles it.
+
+Post-processing — split into individual images:
+- **Transparent** (preferred): `split-clean -o dir/ --names "apple,banana,..."`
+- **With background:** `split-bg -o dir/ --names "apple,banana,..."`
+
+---
+
+### BG color strategy (applies to all transparent assets)
+
+Pick a `--bg` / prompt bg color that is (1) **distinct from the subject** so rembg separates cleanly, and (2) **close to the expected in-game environment** so residual fringe blends naturally.
+
+Examples: forest game → `#4A6741`; sky/water → `#4A6B8A`; dungeon → `#2A2A2A`; generic → `#808080`.
+
+Avoid pure chromakey colors like `#00FF00` — they create unnatural green fringing.
 
 ## Tips
 
-- Generate characters before their animations (need the character job_id first)
-- Generate multiple assets in parallel — launch several create_* calls, then poll all of them
-- Always verify generated assets by reading the PNGs before integrating into scenes
-- PixelLab handles transparency natively for most character/prop generations
-- Match sprite sizes to viewport — a 64px character in a 320px viewport is enormous
+- Generate multiple images in parallel via multiple Bash calls in one message.
+- Always review generated PNGs before GLB conversion — read each image and check: centered? complete? clean background? Regenerate bad ones first; a bad image wastes 30+ cents on GLB.
+- Convert approved images to GLBs in parallel.

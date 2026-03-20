@@ -49,13 +49,15 @@ godot-claude installs into your Godot project and turns Claude Code into an expe
 ```
 User: "make a pixel art platformer"
     |
-    +- GDD workflow (interactive) → PLAN.md
-    +- PixelLab generates sprites, tilesets, props
+    +- GDD workflow -> Visual Target & Decomposer -> PLAN.md
+    +- Scaffold generates project architecture (STRUCTURE.md)
+    +- Asset Pipeline generates assets (PixelLab, Gemini, Tripo3D)
+    +- LPC Compositor creates layered character spritesheets
     +- Scene builders create .tscn files
     +- Scripts implement game logic
-    +- Visual QA verifies via screenshots
+    +- Visual QA verifies via screenshots (Gemini Flash)
     +- Each task tracked as GSD phase
-    → Playable pixel art game
+    → Playable game
 ```
 
 ### How it works
@@ -93,9 +95,11 @@ Reference files in `.godot-claude/ref/` (error patterns, GDScript conventions, p
 
 | Dependency | Version | Purpose |
 |-----------|---------|---------|
-| [Python](https://python.org/) | 3.10+ | Runs the offline documentation server |
+| [Python](https://python.org/) | 3.10+ | Runs the offline documentation server & tool wrappers |
 | [pandoc](https://pandoc.org/) | Any | Converts Godot docs from RST to Markdown (one-time build) |
-| [PixelLab API key](https://pixellab.ai/) | -- | AI pixel art generation for game assets |
+| [PixelLab API key](https://pixellab.ai/) | -- | AI pixel art generation |
+| [Gemini API Key] | -- | `GOOGLE_API_KEY` for 2D asset generation & Visual QA |
+| [Tripo3D API Key] | -- | `TRIPO3D_API_KEY` for image-to-3D model conversion |
 
 ---
 

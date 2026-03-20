@@ -1,135 +1,114 @@
 # Asset Planner
 
-Analyze a pixel art game, decide what assets it needs, and plan their generation via PixelLab MCP.
+Analyze a game, decide what assets it needs, and generate them within a budget.
 
 ## Input
 
 The caller provides:
-- Game description from `PLAN.md` under **Game Description**
-- For iterations: a specific task description (e.g., "add enemy sprites" or "create tileset for cave level")
+- `budget_cents` — total budget (or remaining budget for iterations)
+- For iterations: a specific task description (e.g. "regenerate car model" or "add missing explosion sprite")
+
+The game description is in `PLAN.md` under **Game Description**.
 
 ## Setup
 
-Read `${CLAUDE_SKILL_DIR}/asset-gen.md` for PixelLab MCP tool reference and workflow.
+Read `${CLAUDE_SKILL_DIR}/asset-gen.md` for CLI reference and prompt templates.
 
 ## Workflow
 
 ### 1. Analyze inputs → identify visual elements
 
-Read `reference.png` — understand the visual composition: what sprites are visible, their proportions, the environment, foreground vs background layers.
+Read `reference.png` — understand the visual composition: what objects are visible, their proportions, the environment, foreground vs background layers. Use this to inform what assets to generate and at what scale.
 
 Read `STRUCTURE.md` (especially **Asset Hints**) and `PLAN.md` (especially **Assets needed** per task). Cross-reference both with the reference image to build the complete asset list:
-- **Characters**: player, enemies, NPCs — use `create_character` + `animate_character`
-- **Tilesets**: ground, walls, platforms — use `create_sidescroller_tileset` or `create_topdown_tileset`
-- **Props/objects**: items, decorations, obstacles — use `create_map_object`
-- **Backgrounds**: parallax layers, title screens — use `create_map_object` with larger dimensions
+- **3D models**: characters, vehicles, key props, buildings — anything that needs geometry
+- **Textures**: ground surfaces, walls, UI backgrounds — flat materials that tile
+- **Backgrounds**: sky panoramas, parallax layers, title screens, large scenic images — use pro image with `--size 2K` and an appropriate `--aspect-ratio`
 
-### 2. Prioritize by visual impact
+The scaffold's Asset Hints describe what the architecture needs. The decomposer's Assets needed fields describe what each task needs. Reconcile both — they may overlap or one may mention assets the other missed.
 
-Generate the most visually important assets first:
-1. Player character (with all needed animations)
-2. Core tileset (ground/platforms)
-3. Enemy sprites
-4. Props and decorations
-5. UI elements
-6. Background/parallax layers
+### 2. Prioritize and budget
+
+Each asset costs:
+- Texture: 7 cents (1K image)
+- HQ texture / background: 10 cents (2K image with `--size 2K`)
+- Large map / panorama: 15 cents (4K image with `--size 4K` — one large image can replace several smaller ones)
+- 3D model: 37 cents (7 cent image + 30 cent GLB at medium quality)
+
+Prioritize by visual impact — what makes the game recognizable. Cut low-impact assets first if budget is tight. Reserve ~10% of budget for retries.
 
 ### 3. Understand art direction
 
-Read the **Art direction** from `ASSETS.md` (written by visual-target). Use it as context when writing descriptions for PixelLab:
-- Include palette references (e.g., "NES palette", "limited 16-color")
-- Include pixel density (e.g., "16x16 character", "32x32 detailed")
-- Include style era (e.g., "Game Boy style", "SNES RPG style")
+Read the **Art direction** from `ASSETS.md` (written by visual-target). Use it as context when crafting each asset prompt — but do NOT mechanically prepend it. Different asset types need different prompting:
+- **Textures** often need no style language at all — describe the material and tiling properties
+- **3D model references** need clean studio lighting and neutral presentation; style cues can hurt mesh quality
+- **Backgrounds/panoramas** benefit most from art direction language
+- **Sprites** may need some style cues but adapted to the subject
 
-### 4. Plan PixelLab generations
+Craft each prompt for its specific goal. The art direction tells you the visual identity; translate it appropriately per asset type.
 
-For each asset, determine the right PixelLab tool and parameters:
+### 4. Generate images, review, convert to GLBs
 
-**Characters:**
-```
-create_character(
-  description: "{character description in art style}",
-  width: 32, height: 32,
-  style: "pixel_art"
-)
-→ then animate_character(job_id, animation_type: "walk", frame_count: 6)
-→ then animate_character(job_id, animation_type: "idle", frame_count: 4)
-```
+Use the asset-gen instructions for prompt templates, CLI commands, and review guidance. Generate all images in parallel, review each PNG, regenerate bad ones (max 1 retry each), then convert approved 3D images to GLBs in parallel.
 
-**Tilesets:**
-```
-create_sidescroller_tileset(  # or create_topdown_tileset
-  description: "{tileset description}",
-  tile_size: 16
-)
-```
+To prevent cost overruns, a JSON log is automatically maintained that tracks the cost of each request.
 
-**Props/Objects:**
-```
-create_map_object(
-  description: "{object description in art style}",
-  width: 32, height: 32,
-  style: "pixel_art"
-)
-```
+#### Common Mistakes
 
-### 5. Size Guide
+- **Detailed image shrunk to a tile** — generating a richly detailed image then scaling it down to a small tile makes details tiny and clunky. Generate with shapes and level of detail appropriate for the target display size.
+- **Tiling texture for a unique background** — don't tile a small repeating texture where the game needs a single scenic background. Use a Pro image instead.
+- **Sprite sheets for particle effects** — fire, smoke, water, and similar effects look better as procedural particles or shaders. Don't waste a sprite sheet on them unless the game style calls for it.
+- **Image where procedural drawing works** — pure geometric primitives (solid-color rectangles for health bars, single-color circle for a ball, straight divider lines) should be drawn in code. But anything with texture, detail, or artistic style — characters, backgrounds, terrain, objects, icons — should use generated assets even if you *could* approximate it with code. Procedural vector art almost always looks worse than a generated image.
+- **Stretching one texture over a large area** — a small texture stretched across a big surface looks blurry. Use a tileable texture or generate at higher resolution.
+- **Multiple sprite sheets for one character** — the generator cannot reproduce the same character across separate generations. It will look like two different characters. Put all animations for one character into a single sprite sheet (multiple actions across rows).
 
-| Viewport | Character Size | Tile Size | Prop Size |
-|----------|---------------|-----------|-----------|
-| 320×180 | 16×16 or 24×24 | 16×16 | 8×8 to 16×16 |
-| 640×360 | 32×32 or 48×48 | 32×32 | 16×16 to 32×32 |
-| 1280×720 | 64×64 or 96×96 | 64×64 | 32×32 to 64×64 |
+### 5. Write ASSETS.md
 
-### 6. Write ASSETS.md
+Every asset row **must** include a **Size** column — the intended in-game dimensions the coding agent should use when placing this asset. Without this, coders consistently scale backgrounds too small or sprites too tiny.
 
-Every asset entry **must** include pixel dimensions — the coding agent needs exact sizes for SpriteFrames and TileSet configuration.
+- **3D models:** target size in meters, e.g. `4m long` (car), `1.8m tall` (character), `0.3m` (coin)
+- **Textures:** tile size in meters, e.g. `2m tile` (floor repeats every 2m via UV scale)
+- **Backgrounds (pro images):** pixel dimensions to display at, e.g. `1920x1080` (fullscreen), `2560x720` (parallax layer). Mention if it should fill the viewport or scroll.
+- **Sprite sheets:** per-frame display size in pixels, e.g. `128x128 px` (player), `64x64 px` (item). This is the size in the game viewport, not the source resolution.
 
 ```markdown
 # Assets
 
 **Art direction:** <the art direction string>
 
-## Characters
+## 3D Models
 
-| Name | Description | Size | Animations | Path |
-|------|-------------|------|------------|------|
-| player | knight with sword | 32x32 px | idle(4), walk(6), attack(4) | res://assets/characters/player/ |
-| slime | green slime enemy | 24x24 px | idle(4), walk(4), death(3) | res://assets/characters/slime/ |
+| Name | Description | Size | Image | GLB |
+|------|-------------|------|-------|-----|
+| car | sedan with spoiler | 4m long | assets/img/car.png | assets/glb/car.glb |
 
-## Tilesets
+## Textures
 
-| Name | Description | Tile Size | Path |
-|------|-------------|-----------|------|
-| forest | grass, dirt, stone, water | 16x16 px | res://assets/tilesets/forest/ |
-
-## Props
-
-| Name | Description | Size | Path |
-|------|-------------|------|------|
-| coin | spinning gold coin | 16x16 px | res://assets/props/coin/ |
-| chest | wooden treasure chest | 32x24 px | res://assets/props/chest/ |
+| Name | Description | Size | Image |
+|------|-------------|------|-------|
+| grass | green meadow | 2m tile | assets/img/grass.png |
 
 ## Backgrounds
 
-| Name | Description | Size | Path |
-|------|-------------|------|------|
-| forest_bg | parallax forest layers | 320x180 px | res://assets/backgrounds/forest/ |
+| Name | Description | Size | Image |
+|------|-------------|------|-------|
+| forest_bg | dense forest panorama | 1920x1080, fullscreen | assets/img/forest_bg.png |
+
+## Sprites
+
+| Name | Description | Size | Image |
+|------|-------------|------|-------|
+| knight | armored knight walk cycle | 128x128 px per frame | assets/img/knight.png |
 ```
 
-### 7. Update PLAN.md with asset assignments
+### 6. Update PLAN.md with asset assignments
 
-After planning assets, read PLAN.md and add concrete asset assignments to each task that needs them:
+After generating assets, read PLAN.md and add concrete asset assignments to each task that needs them. For tasks with an **Assets needed** field, replace or augment it with an **Assets:** field listing the actual generated files:
 
 ```markdown
 - **Assets:**
-  - `player` character sprite (`res://assets/characters/player/`) — 32x32 px, AnimatedSprite2D
-  - `forest` tileset (`res://assets/tilesets/forest/`) — 16x16 px tiles
+  - `car` GLB model (`assets/glb/car.glb`) — scale to 4m long
+  - `grass` texture (`assets/img/grass.png`) — tile every 2m via UV scale
 ```
 
-### Common Mistakes
-
-- **Generating oversized sprites** — a 64x64 character in a 320x180 viewport takes up 1/3 of the screen width. Match sizes to viewport.
-- **Missing animations** — every character needs at least idle. Movement characters need walk. Combat characters need attack.
-- **Wrong tileset type** — use `create_sidescroller_tileset` for platformers, `create_topdown_tileset` for top-down games.
-- **Forgetting prop sizes** — items, coins, hearts etc. should be smaller than characters, not the same size.
+This ensures no asset is lost in the process — every generated file is assigned to the task that uses it. An asset may appear in multiple tasks.

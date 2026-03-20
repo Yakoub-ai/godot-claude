@@ -66,18 +66,18 @@ open_folder_dialog() {
     local selected=""
 
     if is_wsl; then
-        # WSL: open Windows Explorer and fall back to manual input
-        warn "Detected WSL. Opening Windows Explorer to pick a folder."
-        explorer.exe . 2>/dev/null || true
-        warn "After selecting a folder in Explorer, paste the path here (e.g. C:\\Users\\you\\... or \\wsl$\\...)."
-        return 0
-    fi
+        # WSL: invoke PowerShell to show the Windows FolderBrowserDialog natively
+        local ps_cmd="Add-Type -AssemblyName System.Windows.Forms; \$d=New-Object System.Windows.Forms.FolderBrowserDialog; \$d.Description='\$title'; \$d.ShowNewFolderButton=\$false; if(\$d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){ Write-Output \$d.SelectedPath }"
+        local win_path
+        win_path=$(powershell.exe -NoProfile -Command "$ps_cmd" 2>/dev/null | tr -d '\r') || true
+        
+        if [ -n "$win_path" ]; then
+            selected=$(wslpath -u "$win_path" 2>/dev/null || echo "$win_path")
+        fi
 
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS — open Finder and fall back to manual input
-        warn "Opening Finder. After you locate your Godot project folder, paste the path below."
-        open . 2>/dev/null || true
-        return 0
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS — use AppleScript to launch a native Folder Picker dialog
+        selected=$(osascript -e "tell application \"Finder\" to activate" -e "set myFolder to choose folder with prompt \"$title\"" -e "POSIX path of myFolder" 2>/dev/null) || true
 
     elif command -v zenity &>/dev/null; then
         # Linux — GNOME / GTK
