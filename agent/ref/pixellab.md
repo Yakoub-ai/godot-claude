@@ -29,6 +29,18 @@ Requires `PIXELLAB_API_KEY` environment variable. If not set, tell the user:
 
 ---
 
+## LPC Spritesheet Compositing
+
+If you need to outfit base characters with LPC (Universal LPC Spritesheet) layered equipment:
+1. Generate the base character via PixelLab (or obtain an LPC base).
+2. Obtain the desired equipment layers (hair, clothes, armor).
+3. Use the included compositor tool to flatten them in z-index order (bottom to top):
+   ```bash
+   python agent/tools/lpc_spritesheet.py --layers res://assets/base.png res://assets/shirt.png res://assets/armor.png --out res://assets/final_character.png
+   ```
+
+---
+
 ## Workflow
 
 ```

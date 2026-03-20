@@ -202,12 +202,13 @@ When returning to a project after time away:
 **Commands:** "generate game", "make a game", "build a game", "godogen" → triggers the godogen orchestrator skill
 
 ### For New Projects
-1. GDD workflow (interactive) → PLAN.md + STRUCTURE.md + ASSETS.md
-2. PixelLab generates all pixel art assets
-3. Scene builders create .tscn files (MCP tools preferred, headless fallback)
-4. Runtime scripts implement game logic
-5. Visual QA verifies each task via screenshots (Claude vision)
-6. Each task tracked as GSD phase
+1. GDD workflow -> Visual Target & Reference anchoring (Gemini)
+2. Task Decomposer -> Generates PLAN.md
+3. Scaffold -> Architecture design (STRUCTURE.md) and skeleton
+4. Asset Planner/Generator -> Pixel art (PixelLab) or 2D/3D assets (Gemini / Tripo3D)
+5. Runtime scripts & Scene builders implement logic
+6. Visual QA verifies each task via screenshots (Gemini Flash vision)
+7. Each task tracked as GSD phase
 
 ### For Existing Projects
 1. "add [feature]" or "update [system]" → reads project state via megamemory + MCP
@@ -221,11 +222,12 @@ When returning to a project after time away:
 | `godogen` | Orchestrate full game pipeline | "make a game", "generate game" |
 | `godot-task` | Execute single development task | Called by godogen per task |
 
-### Asset Pipeline (Pixel Art Only)
-All assets generated via PixelLab MCP:
-- Characters: `create_character` → `animate_character`
-- Tilesets: `create_sidescroller_tileset` / `create_topdown_tileset`
-- Props: `create_map_object`
+### Asset Pipeline
+Assets can be generated via multiple providers:
+- **Pixel art:** PixelLab MCP (`create_character`, `create_sidescroller_tileset`, etc.)
+- **2D/General textures:** Gemini via Godogen Asset Generator
+- **3D Models:** Tripo3D API conversion (via Godogen)
+- **Equipment Compositing:** LPC Spritesheet Compositor (`agent/tools/lpc_spritesheet.py`)
 
 ---
 
