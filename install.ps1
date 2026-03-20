@@ -269,6 +269,53 @@ if (Test-Path $addonsSrc) {
     Write-Ok "Godot plugin (addons/) installed"
 }
 
+# Enable godot_mcp plugin in project.godot
+if (Test-Path $addonsSrc) {
+    Write-Step "Enabling godot_mcp plugin in project.godot"
+    $pluginCfg = "res://addons/godot_mcp/plugin.cfg"
+    $godotContent = Get-Content $godotFile -Raw
+
+    if ($godotContent -match '\[editor_plugins\]') {
+        if ($godotContent -notmatch [regex]::Escape($pluginCfg)) {
+            # Add to existing PackedStringArray
+            $pythonCmd = $null
+            foreach ($candidate in @("python3", "python")) {
+                $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+                if ($cmd) {
+                    $ver = & $candidate --version 2>&1
+                    if ($ver -match 'Python 3') { $pythonCmd = $candidate; break }
+                }
+            }
+            if ($pythonCmd) {
+                $pyScript = @"
+import sys, re
+path, plugin = sys.argv[1], sys.argv[2]
+with open(path) as f: content = f.read()
+def add_plugin(m):
+    cur = m.group(1).strip()
+    if cur:
+        return f'enabled=PackedStringArray({cur}, "{plugin}")'
+    return f'enabled=PackedStringArray("{plugin}")'
+content = re.sub(r'enabled=PackedStringArray\((.*?)\)', add_plugin, content)
+with open(path, 'w') as f: f.write(content)
+"@
+                $tmpScript = [System.IO.Path]::GetTempFileName() + ".py"
+                Set-Content -Path $tmpScript -Value $pyScript -Encoding UTF8
+                & $pythonCmd $tmpScript $godotFile $pluginCfg
+                Remove-Item $tmpScript -Force
+                Write-Ok "Added godot_mcp to existing [editor_plugins]"
+            } else {
+                Write-Warn "python3 not found -- add manually to project.godot: enabled=PackedStringArray(`"$pluginCfg`")"
+            }
+        } else {
+            Write-Ok "godot_mcp plugin already enabled in project.godot"
+        }
+    } else {
+        Add-Content -Path $godotFile -Value "`n[editor_plugins]`n`nenabled=PackedStringArray(`"res://addons/godot_mcp/plugin.cfg`")"
+        Write-Ok "godot_mcp plugin enabled in project.godot"
+    }
+}
+
 # Check PixelLab API key
 if (-not $env:PIXELLAB_API_KEY) {
     Write-Host ""

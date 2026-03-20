@@ -262,6 +262,41 @@ if [ -d "$ADDONS_SRC" ]; then
     ok "Godot plugin (addons/) installed"
 fi
 
+# Enable godot_mcp plugin in project.godot
+if [ -d "$ADDONS_SRC" ]; then
+    step "Enabling godot_mcp plugin in project.godot"
+    PLUGIN_CFG="res://addons/godot_mcp/plugin.cfg"
+    PROJECT_GODOT="$PROJECT_PATH/project.godot"
+
+    if grep -q "\[editor_plugins\]" "$PROJECT_GODOT" 2>/dev/null; then
+        if ! grep -q "$PLUGIN_CFG" "$PROJECT_GODOT" 2>/dev/null; then
+            # Add to existing [editor_plugins] PackedStringArray
+            if command -v python3 &>/dev/null; then
+                python3 - "$PROJECT_GODOT" "$PLUGIN_CFG" << 'PYEOF'
+import sys, re
+path, plugin = sys.argv[1], sys.argv[2]
+with open(path) as f: content = f.read()
+def add_plugin(m):
+    cur = m.group(1).strip()
+    if cur:
+        return f'enabled=PackedStringArray({cur}, "{plugin}")'
+    return f'enabled=PackedStringArray("{plugin}")'
+content = re.sub(r'enabled=PackedStringArray\((.*?)\)', add_plugin, content)
+with open(path, 'w') as f: f.write(content)
+PYEOF
+                ok "Added godot_mcp to existing [editor_plugins]"
+            else
+                warn "python3 not found — add manually to project.godot: enabled=PackedStringArray(\"$PLUGIN_CFG\")"
+            fi
+        else
+            ok "godot_mcp plugin already enabled in project.godot"
+        fi
+    else
+        printf '\n[editor_plugins]\n\nenabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")\n' >> "$PROJECT_GODOT"
+        ok "godot_mcp plugin enabled in project.godot"
+    fi
+fi
+
 # Check PixelLab API key
 if [ -z "${PIXELLAB_API_KEY-}" ]; then
     echo ""

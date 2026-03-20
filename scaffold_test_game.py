@@ -12,7 +12,7 @@ def main():
     project_godot_path = os.path.join(TARGET_DIR, "project.godot")
     with open(project_godot_path, "a") as f:
         f.write("\n\n[editor_plugins]\n")
-        f.write('enabled=PackedStringArray("res://addons/godot-claude/plugin.cfg")\n')
+        f.write('enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")\n')
     
     # 2. Test the Sprite Generation
     assets_dir = os.path.join(TARGET_DIR, "assets")
