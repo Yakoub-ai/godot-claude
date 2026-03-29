@@ -18,6 +18,7 @@ godot-claude installs into your Godot project and turns Claude Code into an expe
 | **Generate pixel art** | PixelLab MCP integration for characters, animations, tilesets |
 | **Remember across sessions** | megamemory knowledge graph persists architecture, decisions, and patterns |
 | **Look up any Godot API** | 1,582 offline docs or cloud fallback via context7 |
+| **Generate complete games** | Godogen pipeline: describe a game → get a playable pixel art game |
 | **Track development phases** | GSD workflow for milestones, phases, and task execution |
 
 ---
@@ -41,6 +42,22 @@ godot-claude installs into your Godot project and turns Claude Code into an expe
     (GDScript)           (RST → Markdown)
           |
     Godot 4.x Engine
+```
+
+### Game Generation Pipeline (godogen)
+
+```
+User: "make a pixel art platformer"
+    |
+    +- GDD workflow -> Visual Target & Decomposer -> PLAN.md
+    +- Scaffold generates project architecture (STRUCTURE.md)
+    +- Asset Pipeline generates assets (PixelLab, Gemini, Tripo3D)
+    +- LPC Compositor creates layered character spritesheets
+    +- Scene builders create .tscn files
+    +- Scripts implement game logic
+    +- Visual QA verifies via screenshots (Gemini Flash)
+    +- Each task tracked as GSD phase
+    → Playable game
 ```
 
 ### How it works
@@ -78,9 +95,11 @@ Reference files in `.godot-claude/ref/` (error patterns, GDScript conventions, p
 
 | Dependency | Version | Purpose |
 |-----------|---------|---------|
-| [Python](https://python.org/) | 3.10+ | Runs the offline documentation server |
+| [Python](https://python.org/) | 3.10+ | Runs the offline documentation server & tool wrappers |
 | [pandoc](https://pandoc.org/) | Any | Converts Godot docs from RST to Markdown (one-time build) |
-| [PixelLab API key](https://pixellab.ai/) | -- | AI pixel art generation for game assets |
+| [PixelLab API key](https://pixellab.ai/) | -- | AI pixel art generation |
+| [Gemini API Key] | -- | `GOOGLE_API_KEY` for 2D asset generation & Visual QA |
+| [Tripo3D API Key] | -- | `TRIPO3D_API_KEY` for image-to-3D model conversion |
 
 ---
 
@@ -89,7 +108,8 @@ Reference files in `.godot-claude/ref/` (error patterns, GDScript conventions, p
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_ORG/godot-claude.git
+git clone https://github.com/Yakoub-ai/godot-claude.git
+cd godot-claude
 ```
 
 ### 2. Run the installer
@@ -194,6 +214,9 @@ Once Claude Code is running in your project, use natural language:
 | `what's done` | List completed features and systems |
 | `optimize` | Run the performance profiling workflow |
 | `fix errors` | Enter the error detection and fixing loop |
+| `make a game` | Godogen pipeline: GDD → assets → scenes → scripts → playable game |
+| `generate game` | Same as "make a game" |
+| `add enemies` | Incremental godogen: adds feature to existing project |
 
 ### Model routing
 
@@ -205,6 +228,30 @@ Different tasks benefit from different models. The agent will suggest switching 
 | Development, features, bug fixes | Sonnet (default) | `claude` |
 | Documentation, comments | Haiku | `claude --model haiku` |
 | Changelogs, version bumps | Haiku | `claude --model haiku` |
+
+---
+
+## Autoresearch Framework (Self-Improving Agent)
+
+`godot-claude` ships with a `Karpathy`-inspired autoresearch system. This framework isolates the agent in a test sandbox and grades its game generation logic against a fitness function, enabling you to optimize the agent's prompts and orchestration skills overnight.
+
+### How to run the Autoresearch Evaluation:
+
+1. **Prepare the sandbox:**
+   ```bash
+   cd godot-claude
+   python3 autoresearch/prepare.py
+   ```
+   *This generates a clean Godot sandbox at `/tmp/godot_autoresearch_sandbox/` and automatically installs the MCP plugins into it.*
+
+2. **Run the training loop:**
+   ```bash
+   python3 autoresearch/train.py
+   ```
+   *This initiates an automated headless Claude session that will attempt to build an entire game within a strict 5-minute timeout. It evaluates success (Visual QA / Error Count / Completion Status) and prints a fitness SCORE.*
+
+3. **Provide optimization logic:** 
+   Edit `autoresearch/program.md` to instruct the meta-agent on what files to rewrite (e.g., `agent/skills/godogen/decomposer.md`) to minimize errors and improve the codebase autonomously.
 
 ---
 
@@ -285,7 +332,25 @@ Cloud-based documentation lookup. Used automatically when godot-mcp-docs is not 
 
 ### PixelLab (optional)
 
-AI pixel art generation at [pixellab.ai](https://pixellab.ai). Generates characters, animations, tilesets, and game assets. Requires an API key configured in `.mcp.json`.
+AI pixel art generation at [pixellab.ai](https://pixellab.ai). **Required for game generation pipeline** (godogen). Generates characters, animations, tilesets, and game props. Requires an API key configured in `.mcp.json`.
+
+---
+
+## Demo Prompts
+
+Try these to see the game generation pipeline in action:
+
+**Pixel art platformer:**
+> "Make a pixel art platformer with a knight who can jump and attack slimes in a forest level"
+
+**Top-down RPG:**
+> "Build a top-down pixel art RPG with a village, NPCs you can talk to, and a dungeon with monsters"
+
+**Arcade game:**
+> "Generate a retro arcade game — the player is a spaceship dodging asteroids and shooting enemies"
+
+**Amsterdam Cyclist:**
+> "A 2D side-scrolling cyclist game through Amsterdam on a red bike lane — 4 horizontal lanes, dodge tourists who jump onto the bike lane. Three caricature types: Selfie Walker, Lost Map Reader, Tulip Hauler. Lane switching with W/S, distance and speed HUD."
 
 ---
 
@@ -345,11 +410,21 @@ godot-claude/
 │   ├── pyproject.toml
 │   ├── docs_converter/      # RST-to-Markdown converter
 │   └── docs/                # Generated documentation (after build)
-└── agent/                   # Agent files (copied to .godot-claude/)
-    ├── ref/                 # Reference documents
-    ├── memory/              # Memory stubs
-    └── session/             # Session templates
+├── agent/                   # Agent files (copied to .godot-claude/)
+│   ├── ref/                 # Reference documents
+│   ├── skills/              # Game generation skills
+│   │   ├── godogen/         # Orchestrator (SKILL.md, visual-target, decomposer, scaffold, assets)
+│   │   └── godot-task/      # Task executor (SKILL.md, gdscript, quirks, scenes, scripts, VQA)
+│   ├── tools/               # Python tools (rembg, spritesheet, doc converter)
+│   ├── memory/              # Memory stubs
+│   └── session/             # Session templates
 ```
+
+---
+
+## Credits
+
+The game generation pipeline (godogen) is adapted from [godogen](https://github.com/user/godogen), a standalone Claude Code skills system for autonomous game generation. The pipeline architecture — visual targeting, task decomposition, scaffold generation, asset planning, and visual QA — originates from that project.
 
 ---
 

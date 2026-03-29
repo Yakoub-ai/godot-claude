@@ -22,11 +22,24 @@ warn()  { echo -e "  ${YELLOW}⚠${NC} $1"; }
 err()   { echo -e "  ${RED}✗${NC} $1"; }
 ok()    { echo -e "  ${GREEN}✓${NC} $1"; }
 
+# Run a command with a timeout (seconds).
+# On macOS, `timeout` may not exist, so fall back to perl.
+run_with_timeout() {
+    local timeout_secs="$1"; shift
+    if command -v timeout &>/dev/null; then
+        timeout "$timeout_secs" "$@"
+    elif command -v gtimeout &>/dev/null; then
+        gtimeout "$timeout_secs" "$@"
+    else
+        perl -e 'alarm shift; exec @ARGV' "$timeout_secs" "$@"
+    fi
+}
+
 # Header
 echo ""
 echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}${CYAN}║   godot-claude — Claude Code Agent      ║${NC}"
-echo -e "${BOLD}${CYAN}║   for Godot 4.x Game Development        ║${NC}"
+echo -e "${BOLD}${CYAN}║   godot-claude — Claude Code Agent       ║${NC}"
+echo -e "${BOLD}${CYAN}║   for Godot 4.x Game Development         ║${NC}"
 echo -e "${BOLD}${CYAN}║                                          ║${NC}"
 echo -e "${BOLD}${CYAN}║   Compatible with: Claude Code (CLI)     ║${NC}"
 echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════╝${NC}"
@@ -42,16 +55,29 @@ for arg in "$@"; do
     esac
 done
 
+# Detect WSL (Windows Subsystem for Linux)
+is_wsl() {
+    uname -r 2>/dev/null | grep -qiE 'microsoft|wsl'
+}
+
 # Open a native folder picker dialog, returns selected path via stdout
 open_folder_dialog() {
     local title="Select Godot Project or Parent Directory"
     local selected=""
 
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS — AppleScript
-        selected=$(osascript -e \
-            'tell app "System Events" to set f to choose folder with prompt "'"$title"'"' \
-            -e 'POSIX path of f' 2>/dev/null) || true
+    if is_wsl; then
+        # WSL: invoke PowerShell to show the Windows FolderBrowserDialog natively
+        local ps_cmd="Add-Type -AssemblyName System.Windows.Forms; \$d=New-Object System.Windows.Forms.FolderBrowserDialog; \$d.Description='\$title'; \$d.ShowNewFolderButton=\$false; if(\$d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){ Write-Output \$d.SelectedPath }"
+        local win_path
+        win_path=$(powershell.exe -NoProfile -Command "$ps_cmd" 2>/dev/null | tr -d '\r') || true
+        
+        if [ -n "$win_path" ]; then
+            selected=$(wslpath -u "$win_path" 2>/dev/null || echo "$win_path")
+        fi
+
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS — use AppleScript to launch a native Folder Picker dialog
+        selected=$(osascript -e "tell application \"Finder\" to activate" -e "set myFolder to choose folder with prompt \"$title\"" -e "POSIX path of myFolder" 2>/dev/null) || true
 
     elif command -v zenity &>/dev/null; then
         # Linux — GNOME / GTK
@@ -64,6 +90,12 @@ open_folder_dialog() {
     elif command -v yad &>/dev/null; then
         # Linux — yad (another GTK dialog)
         selected=$(yad --file --directory --title="$title" 2>/dev/null) || true
+    else
+        # Linux without a supported dialog tool: open current dir (if GUI) and fall back to manual
+        if [ -n "${DISPLAY-}" ] || [ -n "${WAYLAND_DISPLAY-}" ]; then
+            warn "No folder-picker tool found (zenity/kdialog/yad). Opening current directory and falling back to manual input."
+            xdg-open . 2>/dev/null || true
+        fi
     fi
 
     echo "$selected"
@@ -230,6 +262,72 @@ if [ -d "$ADDONS_SRC" ]; then
     ok "Godot plugin (addons/) installed"
 fi
 
+# Enable godot_mcp plugin in project.godot
+if [ -d "$ADDONS_SRC" ]; then
+    step "Enabling godot_mcp plugin in project.godot"
+    PLUGIN_CFG="res://addons/godot_mcp/plugin.cfg"
+    PROJECT_GODOT="$PROJECT_PATH/project.godot"
+
+    if grep -q "\[editor_plugins\]" "$PROJECT_GODOT" 2>/dev/null; then
+        if ! grep -q "$PLUGIN_CFG" "$PROJECT_GODOT" 2>/dev/null; then
+            # Add to existing [editor_plugins] PackedStringArray
+            if command -v python3 &>/dev/null; then
+                python3 - "$PROJECT_GODOT" "$PLUGIN_CFG" << 'PYEOF'
+import sys, re
+path, plugin = sys.argv[1], sys.argv[2]
+with open(path) as f: content = f.read()
+def add_plugin(m):
+    cur = m.group(1).strip()
+    if cur:
+        return f'enabled=PackedStringArray({cur}, "{plugin}")'
+    return f'enabled=PackedStringArray("{plugin}")'
+content = re.sub(r'enabled=PackedStringArray\((.*?)\)', add_plugin, content)
+with open(path, 'w') as f: f.write(content)
+PYEOF
+                ok "Added godot_mcp to existing [editor_plugins]"
+            else
+                warn "python3 not found — add manually to project.godot: enabled=PackedStringArray(\"$PLUGIN_CFG\")"
+            fi
+        else
+            ok "godot_mcp plugin already enabled in project.godot"
+        fi
+    else
+        printf '\n[editor_plugins]\n\nenabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")\n' >> "$PROJECT_GODOT"
+        ok "godot_mcp plugin enabled in project.godot"
+    fi
+fi
+
+# Check PixelLab API key
+if [ -z "${PIXELLAB_API_KEY-}" ]; then
+    echo ""
+    warn "PIXELLAB_API_KEY not set — game generation pipeline (godogen) won't be able to create assets."
+    echo -e "    Get a key: ${CYAN}https://pixellab.ai/${NC}"
+    echo -e "    Set it:    ${CYAN}export PIXELLAB_API_KEY=pk_...${NC}"
+    echo ""
+fi
+
+# Optional: generate offline Godot API docs for godot-task skill
+DOC_API_SCRIPT="$TARGET_DIR/tools/ensure_doc_api.sh"
+if [ -f "$DOC_API_SCRIPT" ] && command -v python3 &>/dev/null && command -v git &>/dev/null; then
+    if [ ! -d "$TARGET_DIR/skills/godot-task/doc_api" ] || [ ! -f "$TARGET_DIR/skills/godot-task/doc_api/_common.md" ]; then
+        echo ""
+        echo -e "  ${BOLD}Offline Godot API docs (one-time)${NC}"
+        echo -e "  Generates per-class markdown API reference from Godot source."
+        echo -e "  Used as offline fallback when MCP docs are unavailable."
+        echo ""
+        read -rp "  Generate offline API docs now? [y/N]: " GEN_DOCS
+        echo ""
+        if [[ "$GEN_DOCS" =~ ^[Yy] ]]; then
+            step "Generating offline Godot API docs..."
+            if bash "$DOC_API_SCRIPT" 2>&1; then
+                ok "Offline API docs generated"
+            else
+                warn "Failed to generate API docs — godot-task will use MCP docs instead"
+            fi
+        fi
+    fi
+fi
+
 # If no project CLAUDE.md exists, create a minimal one
 if [ ! -f "$PROJECT_PATH/CLAUDE.md" ]; then
     step "Creating project CLAUDE.md"
@@ -293,8 +391,32 @@ if [ "$SKIP_MCP" = false ] && [ ! -f "$MCP_FILE" ]; then
         fi
     fi
 
-    # Generate .mcp.json
-    if [ "$DOCS_AVAILABLE" = true ]; then
+    # Generate .mcp.json based on available services
+    if [ "$DOCS_AVAILABLE" = true ] && [ -n "${PIXELLAB_API_KEY-}" ]; then
+        cat > "$MCP_FILE" << EOF
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$SOURCE_DIR/server/build/index.js"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "godot-mcp-docs": {
+      "command": "python3",
+      "args": ["$DOCS_PATH/main.py"]
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer \${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
+EOF
+        ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + pixellab)"
+    elif [ "$DOCS_AVAILABLE" = true ]; then
         cat > "$MCP_FILE" << EOF
 {
   "mcpServers": {
@@ -314,8 +436,27 @@ EOF
             ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs)"
         else
             ok ".mcp.json created (docs server configured but docs not built yet)"
-            warn "Run later: cd $DOCS_PATH && python3 docs_converter/godot_docs_converter.py && find docs -type f | sort > docs/docs_tree.txt"
         fi
+    elif [ -n "${PIXELLAB_API_KEY-}" ]; then
+        cat > "$MCP_FILE" << EOF
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$SOURCE_DIR/server/build/index.js"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer \${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
+EOF
+        ok ".mcp.json created (godot-engine-mcp + pixellab)"
     else
         cat > "$MCP_FILE" << EOF
 {
@@ -328,7 +469,7 @@ EOF
   }
 }
 EOF
-        ok ".mcp.json created (godot-engine-mcp only — agent will use context7 for docs)"
+        ok ".mcp.json created (godot-engine-mcp only)"
     fi
 elif [ -f "$MCP_FILE" ]; then
     ok ".mcp.json already exists — skipped"
@@ -392,6 +533,10 @@ echo -e "  ${BOLD}First commands:${NC}"
 echo -e "    ${CYAN}start new game${NC}                 # GDD workflow → full project scaffold"
 echo -e "    ${CYAN}continue${NC}                       # Resume last session"
 echo -e "    ${CYAN}status${NC}                         # Project state"
+echo ""
+echo -e "  ${BOLD}Game generation:${NC}"
+echo -e "    ${CYAN}make a game${NC}                    # Describe a game → get a playable pixel art game"
+echo -e "    ${CYAN}add enemies${NC}                    # Add features to existing project"
 echo ""
 echo -e "  ${BOLD}Model routing:${NC}"
 echo -e "    Architecture / GDD:    ${CYAN}claude --model opus${NC}"

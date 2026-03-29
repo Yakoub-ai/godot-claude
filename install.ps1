@@ -49,8 +49,8 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
 function Write-Header {
     Write-Host ""
     Write-Host "$($BOLD)$($CYAN)+==========================================+$($RST)"
-    Write-Host "$($BOLD)$($CYAN)|   godot-claude - Claude Code Agent      |$($RST)"
-    Write-Host "$($BOLD)$($CYAN)|   for Godot 4.x Game Development        |$($RST)"
+    Write-Host "$($BOLD)$($CYAN)|   godot-claude - Claude Code Agent       |$($RST)"
+    Write-Host "$($BOLD)$($CYAN)|   for Godot 4.x Game Development         |$($RST)"
     Write-Host "$($BOLD)$($CYAN)|                                          |$($RST)"
     Write-Host "$($BOLD)$($CYAN)|   Compatible with: Claude Code (CLI)     |$($RST)"
     Write-Host "$($BOLD)$($CYAN)+==========================================+$($RST)"
@@ -269,6 +269,62 @@ if (Test-Path $addonsSrc) {
     Write-Ok "Godot plugin (addons/) installed"
 }
 
+# Enable godot_mcp plugin in project.godot
+if (Test-Path $addonsSrc) {
+    Write-Step "Enabling godot_mcp plugin in project.godot"
+    $pluginCfg = "res://addons/godot_mcp/plugin.cfg"
+    $godotContent = Get-Content $godotFile -Raw
+
+    if ($godotContent -match '\[editor_plugins\]') {
+        if ($godotContent -notmatch [regex]::Escape($pluginCfg)) {
+            # Add to existing PackedStringArray
+            $pythonCmd = $null
+            foreach ($candidate in @("python3", "python")) {
+                $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+                if ($cmd) {
+                    $ver = & $candidate --version 2>&1
+                    if ($ver -match 'Python 3') { $pythonCmd = $candidate; break }
+                }
+            }
+            if ($pythonCmd) {
+                $pyScript = @"
+import sys, re
+path, plugin = sys.argv[1], sys.argv[2]
+with open(path) as f: content = f.read()
+def add_plugin(m):
+    cur = m.group(1).strip()
+    if cur:
+        return f'enabled=PackedStringArray({cur}, "{plugin}")'
+    return f'enabled=PackedStringArray("{plugin}")'
+content = re.sub(r'enabled=PackedStringArray\((.*?)\)', add_plugin, content)
+with open(path, 'w') as f: f.write(content)
+"@
+                $tmpScript = [System.IO.Path]::GetTempFileName() + ".py"
+                Set-Content -Path $tmpScript -Value $pyScript -Encoding UTF8
+                & $pythonCmd $tmpScript $godotFile $pluginCfg
+                Remove-Item $tmpScript -Force
+                Write-Ok "Added godot_mcp to existing [editor_plugins]"
+            } else {
+                Write-Warn "python3 not found -- add manually to project.godot: enabled=PackedStringArray(`"$pluginCfg`")"
+            }
+        } else {
+            Write-Ok "godot_mcp plugin already enabled in project.godot"
+        }
+    } else {
+        Add-Content -Path $godotFile -Value "`n[editor_plugins]`n`nenabled=PackedStringArray(`"res://addons/godot_mcp/plugin.cfg`")"
+        Write-Ok "godot_mcp plugin enabled in project.godot"
+    }
+}
+
+# Check PixelLab API key
+if (-not $env:PIXELLAB_API_KEY) {
+    Write-Host ""
+    Write-Warn "PIXELLAB_API_KEY not set -- game generation pipeline (godogen) won't be able to create assets."
+    Write-Host "    Get a key: $($CYAN)https://pixellab.ai/$($RST)"
+    Write-Host "    Set it:    $($CYAN)`$env:PIXELLAB_API_KEY = 'pk_...'$($RST)"
+    Write-Host ""
+}
+
 # If no project CLAUDE.md exists, create a minimal one
 $claudeDest = Join-Path $ProjectPath "CLAUDE.md"
 if (-not (Test-Path $claudeDest)) {
@@ -338,11 +394,37 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
         }
     }
 
-    # Generate .mcp.json
+    # Generate .mcp.json based on available services
     $serverPath = (Join-Path $sourceDir "server\build\index.js").Replace('\', '/')
     $docsMainPath = (Join-Path $docsPath "main.py").Replace('\', '/')
+    $hasPixelLab = [bool]$env:PIXELLAB_API_KEY
 
-    if ($docsAvailable) {
+    if ($docsAvailable -and $hasPixelLab) {
+        $mcpContent = @"
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$serverPath"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "godot-mcp-docs": {
+      "command": "$pythonCmd",
+      "args": ["$docsMainPath"]
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer `${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
+"@
+        $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
+        Write-Ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + pixellab)"
+    } elseif ($docsAvailable) {
         $mcpContent = @"
 {
   "mcpServers": {
@@ -364,6 +446,27 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
         } else {
             Write-Ok ".mcp.json created (docs server configured but docs not built yet)"
         }
+    } elseif ($hasPixelLab) {
+        $mcpContent = @"
+{
+  "mcpServers": {
+    "godot-engine-mcp": {
+      "command": "node",
+      "args": ["$serverPath"],
+      "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "pixellab": {
+      "type": "http",
+      "url": "https://api.pixellab.ai/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer `${PIXELLAB_API_KEY}"
+      }
+    }
+  }
+}
+"@
+        $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
+        Write-Ok ".mcp.json created (godot-engine-mcp + pixellab)"
     } else {
         $mcpContent = @"
 {
@@ -429,6 +532,8 @@ Write-Host ""
 Write-Host "  $($BOLD)What was installed:$($RST)"
 Write-Host "    .godot-claude/CLAUDE.md  - Agent brain (Claude Code reads this automatically)"
 Write-Host "    .godot-claude/ref/       - 7 reference files (loaded on demand, not all at once)"
+Write-Host "    .godot-claude/skills/    - Game generation skills (godogen pipeline)"
+Write-Host "    .godot-claude/tools/     - Python tools (sprite processing, doc conversion)"
 Write-Host "    .godot-claude/session/   - Session state (survives /clear)"
 Write-Host "    .mcp.json                - MCP server configuration"
 Write-Host ""
@@ -440,6 +545,10 @@ Write-Host "  $($BOLD)First commands to try:$($RST)"
 Write-Host "    $($CYAN)start new game$($RST)                 # Interactive GDD then full project scaffold"
 Write-Host "    $($CYAN)continue$($RST)                       # Resume from last session"
 Write-Host "    $($CYAN)status$($RST)                         # See project state"
+Write-Host ""
+Write-Host "  $($BOLD)Game generation:$($RST)"
+Write-Host "    $($CYAN)make a game$($RST)                    # Describe a game -> get a playable pixel art game"
+Write-Host "    $($CYAN)add enemies$($RST)                    # Add features to existing project"
 Write-Host ""
 Write-Host "  $($BOLD)Use the right model for the job:$($RST)"
 Write-Host "    Architecture / GDD:    $($CYAN)claude --model opus$($RST)"
