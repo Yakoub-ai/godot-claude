@@ -1,6 +1,9 @@
 # OS
 .DS_Store
 Thumbs.db
+# Windows/WSL Zone.Identifier metadata files
+*Zone.Identifier
+*:Zone.Identifier
 
 # IDE
 .vscode/
