@@ -11,7 +11,7 @@
     Files installed:
       .godot-claude/CLAUDE.md  -> Agent instructions (auto-read by Claude Code)
       .godot-claude/ref/       -> Reference files (loaded on demand, not all at once)
-      .godot-claude/memory/    -> Project memory stubs (megamemory used instead)
+      .godot-claude/memory/    -> Project memory stubs (neural-memory used instead)
       .godot-claude/session/   -> Session continuity across /clear
 
 .PARAMETER ProjectPath
@@ -187,6 +187,64 @@ if ($nodeMajor -lt 18) {
 }
 Write-Ok "Node.js v$nodeVersion found"
 
+# --- Step 3b: Check Godot CLI ---
+Write-Step "Checking Godot..."
+$godotCmd = $null
+foreach ($candidate in @("godot", "godot4")) {
+    $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($cmd) { $godotCmd = $candidate; break }
+}
+if ($godotCmd) {
+    $godotVer = & $godotCmd --version 2>&1 | Select-Object -First 1
+    if ($godotVer -match '^4\.') {
+        Write-Ok "Godot $godotVer found"
+    } else {
+        Write-Warn "Godot found but version $godotVer -- need 4.x for headless scene generation"
+    }
+} else {
+    Write-Warn "Godot not found on PATH -- headless scene/script generation won't work."
+    Write-Host "    The godot-task skill needs 'godot' CLI for: godot --headless --script ..."
+    Write-Host "    Add Godot to PATH or create an alias."
+}
+
+# --- Step 3c: Check Python ---
+Write-Step "Checking Python..."
+$pythonCmd = $null
+foreach ($candidate in @("python3", "python")) {
+    $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($cmd) {
+        $ver = & $candidate --version 2>&1
+        if ($ver -match 'Python 3') { $pythonCmd = $candidate; break }
+    }
+}
+if ($pythonCmd) {
+    $pyVer = & $pythonCmd --version 2>&1
+    Write-Ok "$pyVer found"
+
+    # Check/install neural-memory-mcp
+    $nmCheck = & $pythonCmd -c "import neural_memory" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Step "Installing neural-memory-mcp (project knowledge graph)..."
+        & $pythonCmd -m pip install --quiet "neural-memory-mcp[vectors]" 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "neural-memory-mcp installed"
+        } else {
+            Write-Warn "Failed to install neural-memory-mcp -- install manually: pip install 'neural-memory-mcp[vectors]'"
+        }
+    } else {
+        Write-Ok "neural-memory-mcp already installed"
+    }
+
+    # Check uvx
+    if (-not (Get-Command uvx -ErrorAction SilentlyContinue)) {
+        Write-Warn "uvx not found -- neural-memory MCP server in .mcp.json uses uvx."
+        Write-Host "    Install uv: $($CYAN)https://docs.astral.sh/uv/getting-started/installation/$($RST)"
+        Write-Host "    Or change .mcp.json to use: $pythonCmd -m neural_memory"
+    }
+} else {
+    Write-Warn "Python 3 not found -- asset generation tools and docs server require Python 3.10+"
+}
+
 # --- Step 4: Locate source files ---
 $sourceDir = $PSScriptRoot
 $agentSrc  = Join-Path $sourceDir "agent"
@@ -316,12 +374,27 @@ with open(path, 'w') as f: f.write(content)
     }
 }
 
-# Check PixelLab API key
-if (-not $env:PIXELLAB_API_KEY) {
+# Check API keys for asset generation
+Write-Host ""
+if (-not $env:GEMINI_API_KEY -and -not $env:GOOGLE_API_KEY) {
+    Write-Warn "GEMINI_API_KEY not set -- asset generation (Gemini) and visual QA will not work."
+    Write-Host "    Get a key: $($CYAN)https://aistudio.google.com/apikey$($RST)"
+    Write-Host "    Set it:    $($CYAN)`$env:GEMINI_API_KEY = '...'$($RST)"
     Write-Host ""
-    Write-Warn "PIXELLAB_API_KEY not set -- game generation pipeline (godogen) won't be able to create assets."
+}
+
+if (-not $env:PIXELLAB_API_KEY) {
+    Write-Warn "PIXELLAB_API_KEY not set -- pixel art generation via PixelLab will be unavailable."
+    Write-Host "    Gemini and Tripo3D asset generation still work with their own API keys."
     Write-Host "    Get a key: $($CYAN)https://pixellab.ai/$($RST)"
     Write-Host "    Set it:    $($CYAN)`$env:PIXELLAB_API_KEY = 'pk_...'$($RST)"
+    Write-Host ""
+}
+
+if (-not $env:TRIPO3D_API_KEY) {
+    Write-Warn "TRIPO3D_API_KEY not set -- 3D model generation (image->GLB) will be unavailable."
+    Write-Host "    Get a key: $($CYAN)https://www.tripo3d.ai/$($RST)"
+    Write-Host "    Set it:    $($CYAN)`$env:TRIPO3D_API_KEY = '...'$($RST)"
     Write-Host ""
 }
 
@@ -384,7 +457,7 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
                     Write-Ok "Godot docs built successfully"
                     $docsReady = $true
                 } catch {
-                    Write-Warn "Docs build failed -- agent will use context7 for docs"
+                    Write-Warn "Docs build failed -- agent will use offline doc_api for docs"
                 }
                 Pop-Location
             }
@@ -412,6 +485,10 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
       "command": "$pythonCmd",
       "args": ["$docsMainPath"]
     },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
+    },
     "pixellab": {
       "type": "http",
       "url": "https://api.pixellab.ai/mcp/v1",
@@ -423,7 +500,7 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
 }
 "@
         $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
-        Write-Ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + pixellab)"
+        Write-Ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + neural-memory + pixellab)"
     } elseif ($docsAvailable) {
         $mcpContent = @"
 {
@@ -436,13 +513,17 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
     "godot-mcp-docs": {
       "command": "$pythonCmd",
       "args": ["$docsMainPath"]
+    },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
     }
   }
 }
 "@
         $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
         if ($docsReady) {
-            Write-Ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs)"
+            Write-Ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + neural-memory)"
         } else {
             Write-Ok ".mcp.json created (docs server configured but docs not built yet)"
         }
@@ -455,6 +536,10 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
       "args": ["$serverPath"],
       "env": { "GODOT_MCP_PORT": "6505" }
     },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
+    },
     "pixellab": {
       "type": "http",
       "url": "https://api.pixellab.ai/mcp/v1",
@@ -466,7 +551,7 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
 }
 "@
         $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
-        Write-Ok ".mcp.json created (godot-engine-mcp + pixellab)"
+        Write-Ok ".mcp.json created (godot-engine-mcp + neural-memory + pixellab)"
     } else {
         $mcpContent = @"
 {
@@ -475,12 +560,16 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
       "command": "node",
       "args": ["$serverPath"],
       "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
     }
   }
 }
 "@
         $mcpContent | Set-Content -Path $mcpFile -Encoding UTF8
-        Write-Ok ".mcp.json created (godot-engine-mcp only -- agent will use context7 for docs)"
+        Write-Ok ".mcp.json created (godot-engine-mcp + neural-memory)"
     }
 } elseif (Test-Path $mcpFile) {
     Write-Ok ".mcp.json already exists -- skipped"
@@ -488,7 +577,7 @@ if (-not $SkipMcp -and -not (Test-Path $mcpFile)) {
 
 # --- Step 9: Update .gitignore ---
 $gitignore = Join-Path $ProjectPath ".gitignore"
-$ignoreEntries = @(".godot-claude/memory/", ".godot-claude/session/", ".megamemory/", ".planning/")
+$ignoreEntries = @(".godot-claude/memory/", ".godot-claude/session/", ".neural-memory/", ".planning/")
 
 if (Test-Path $gitignore) {
     $content = Get-Content $gitignore -Raw
@@ -501,8 +590,8 @@ if (Test-Path $gitignore) {
         if ($content -notmatch [regex]::Escape(".godot-claude/memory/")) {
             Add-Content -Path $gitignore -Value "`n# godot-claude (personal data -- do not commit)`n.godot-claude/memory/`n.godot-claude/session/"
         }
-        if ($content -notmatch [regex]::Escape(".megamemory/")) {
-            Add-Content -Path $gitignore -Value "`n# Knowledge graph and planning (local state)`n.megamemory/`n.planning/"
+        if ($content -notmatch [regex]::Escape(".neural-memory/")) {
+            Add-Content -Path $gitignore -Value "`n# Knowledge graph and planning (local state)`n.neural-memory/`n.planning/"
         }
         Write-Ok ".gitignore updated"
     }
@@ -517,7 +606,7 @@ if (Test-Path $gitignore) {
 .godot-claude/session/
 
 # Knowledge graph and planning (local state)
-.megamemory/
+.neural-memory/
 .planning/
 "@ | Set-Content -Path $gitignore -Encoding UTF8
     Write-Ok ".gitignore created"

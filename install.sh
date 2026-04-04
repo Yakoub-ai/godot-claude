@@ -198,6 +198,58 @@ if [ "$NODE_VERSION" -lt 18 ] 2>/dev/null; then
 fi
 ok "Node.js $(node -v) found"
 
+# Check Godot CLI
+step "Checking Godot…"
+GODOT_CMD=""
+for cmd in godot godot4; do
+    if command -v "$cmd" &>/dev/null; then GODOT_CMD="$cmd"; break; fi
+done
+if [ -n "$GODOT_CMD" ]; then
+    GODOT_VER=$($GODOT_CMD --version 2>&1 | head -1)
+    if echo "$GODOT_VER" | grep -q '^4\.'; then
+        ok "Godot $GODOT_VER found"
+    else
+        warn "Godot found but version $GODOT_VER — need 4.x for headless scene generation"
+    fi
+else
+    warn "Godot not found on PATH — headless scene/script generation won't work."
+    echo -e "    The godot-task skill needs 'godot' CLI for: godot --headless --script ..."
+    echo -e "    Add Godot to PATH or create an alias."
+fi
+
+# Check xvfb on Linux (needed for screenshot capture in headless environments)
+if [[ "$OSTYPE" == "linux"* ]] && ! command -v xvfb-run &>/dev/null; then
+    warn "xvfb-run not found — screenshot capture may fail in headless environments."
+    echo -e "    Install: ${CYAN}sudo apt install xvfb${NC}"
+fi
+
+# Check Python dependencies
+step "Checking Python…"
+if command -v python3 &>/dev/null; then
+    ok "Python3 $(python3 --version 2>&1 | cut -d' ' -f2) found"
+
+    # Check/install neural-memory-mcp
+    if ! python3 -c "import neural_memory" 2>/dev/null; then
+        step "Installing neural-memory-mcp (project knowledge graph)…"
+        if python3 -m pip install --quiet "neural-memory-mcp[vectors]" 2>&1; then
+            ok "neural-memory-mcp installed"
+        else
+            warn "Failed to install neural-memory-mcp — install manually: pip install 'neural-memory-mcp[vectors]'"
+        fi
+    else
+        ok "neural-memory-mcp already installed"
+    fi
+
+    # Check uvx (needed for .mcp.json neural-memory server)
+    if ! command -v uvx &>/dev/null; then
+        warn "uvx not found — neural-memory MCP server in .mcp.json uses uvx."
+        echo -e "    Install uv: ${CYAN}curl -LsSf https://astral.sh/uv/install.sh | sh${NC}"
+        echo -e "    Or change .mcp.json to use: python3 -m neural_memory"
+    fi
+else
+    warn "python3 not found — asset generation tools and docs server require Python 3.10+"
+fi
+
 # Source files
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_SRC="$SOURCE_DIR/agent"
@@ -297,12 +349,27 @@ PYEOF
     fi
 fi
 
-# Check PixelLab API key
-if [ -z "${PIXELLAB_API_KEY-}" ]; then
+# Check API keys for asset generation
+echo ""
+if [ -z "${GEMINI_API_KEY-}" ] && [ -z "${GOOGLE_API_KEY-}" ]; then
+    warn "GEMINI_API_KEY not set — asset generation (Gemini) and visual QA will not work."
+    echo -e "    Get a key: ${CYAN}https://aistudio.google.com/apikey${NC}"
+    echo -e "    Set it:    ${CYAN}export GEMINI_API_KEY=...${NC}"
     echo ""
-    warn "PIXELLAB_API_KEY not set — game generation pipeline (godogen) won't be able to create assets."
+fi
+
+if [ -z "${PIXELLAB_API_KEY-}" ]; then
+    warn "PIXELLAB_API_KEY not set — pixel art generation via PixelLab will be unavailable."
+    echo -e "    Gemini and Tripo3D asset generation still work with their own API keys."
     echo -e "    Get a key: ${CYAN}https://pixellab.ai/${NC}"
     echo -e "    Set it:    ${CYAN}export PIXELLAB_API_KEY=pk_...${NC}"
+    echo ""
+fi
+
+if [ -z "${TRIPO3D_API_KEY-}" ]; then
+    warn "TRIPO3D_API_KEY not set — 3D model generation (image→GLB) will be unavailable."
+    echo -e "    Get a key: ${CYAN}https://www.tripo3d.ai/${NC}"
+    echo -e "    Set it:    ${CYAN}export TRIPO3D_API_KEY=...${NC}"
     echo ""
 fi
 
@@ -379,7 +446,7 @@ if [ "$SKIP_MCP" = false ] && [ ! -f "$MCP_FILE" ]; then
                         ok "Godot docs built successfully"
                         DOCS_READY=true
                     else
-                        warn "Docs build failed — agent will use context7 for docs"
+                        warn "Docs build failed — agent will use offline doc_api for docs"
                     fi
                 fi
             else
@@ -405,6 +472,10 @@ if [ "$SKIP_MCP" = false ] && [ ! -f "$MCP_FILE" ]; then
       "command": "python3",
       "args": ["$DOCS_PATH/main.py"]
     },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
+    },
     "pixellab": {
       "type": "http",
       "url": "https://api.pixellab.ai/mcp/v1",
@@ -415,7 +486,7 @@ if [ "$SKIP_MCP" = false ] && [ ! -f "$MCP_FILE" ]; then
   }
 }
 EOF
-        ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + pixellab)"
+        ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + neural-memory + pixellab)"
     elif [ "$DOCS_AVAILABLE" = true ]; then
         cat > "$MCP_FILE" << EOF
 {
@@ -428,12 +499,16 @@ EOF
     "godot-mcp-docs": {
       "command": "python3",
       "args": ["$DOCS_PATH/main.py"]
+    },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
     }
   }
 }
 EOF
         if [ "$DOCS_READY" = true ]; then
-            ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs)"
+            ok ".mcp.json created (godot-engine-mcp + godot-mcp-docs + neural-memory)"
         else
             ok ".mcp.json created (docs server configured but docs not built yet)"
         fi
@@ -446,6 +521,10 @@ EOF
       "args": ["$SOURCE_DIR/server/build/index.js"],
       "env": { "GODOT_MCP_PORT": "6505" }
     },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
+    },
     "pixellab": {
       "type": "http",
       "url": "https://api.pixellab.ai/mcp/v1",
@@ -456,7 +535,7 @@ EOF
   }
 }
 EOF
-        ok ".mcp.json created (godot-engine-mcp + pixellab)"
+        ok ".mcp.json created (godot-engine-mcp + neural-memory + pixellab)"
     else
         cat > "$MCP_FILE" << EOF
 {
@@ -465,11 +544,15 @@ EOF
       "command": "node",
       "args": ["$SOURCE_DIR/server/build/index.js"],
       "env": { "GODOT_MCP_PORT": "6505" }
+    },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
     }
   }
 }
 EOF
-        ok ".mcp.json created (godot-engine-mcp only)"
+        ok ".mcp.json created (godot-engine-mcp + neural-memory)"
     fi
 elif [ -f "$MCP_FILE" ]; then
     ok ".mcp.json already exists — skipped"
@@ -479,7 +562,7 @@ fi
 GITIGNORE="$PROJECT_PATH/.gitignore"
 if [ -f "$GITIGNORE" ]; then
     NEEDS_UPDATE=false
-    for entry in ".godot-claude/memory/" ".godot-claude/session/" ".megamemory/" ".planning/"; do
+    for entry in ".godot-claude/memory/" ".godot-claude/session/" ".neural-memory/" ".planning/"; do
         if ! grep -q "$entry" "$GITIGNORE" 2>/dev/null; then
             NEEDS_UPDATE=true
             break
@@ -494,10 +577,10 @@ if [ -f "$GITIGNORE" ]; then
             echo ".godot-claude/memory/" >> "$GITIGNORE"
             echo ".godot-claude/session/" >> "$GITIGNORE"
         fi
-        if ! grep -q ".megamemory/" "$GITIGNORE" 2>/dev/null; then
+        if ! grep -q ".neural-memory/" "$GITIGNORE" 2>/dev/null; then
             echo "" >> "$GITIGNORE"
             echo "# Knowledge graph and planning (local state)" >> "$GITIGNORE"
-            echo ".megamemory/" >> "$GITIGNORE"
+            echo ".neural-memory/" >> "$GITIGNORE"
             echo ".planning/" >> "$GITIGNORE"
         fi
         ok ".gitignore updated"
@@ -513,7 +596,7 @@ else
 .godot-claude/session/
 
 # Knowledge graph and planning (local state)
-.megamemory/
+.neural-memory/
 .planning/
 EOF
     ok ".gitignore created"

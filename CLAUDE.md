@@ -16,11 +16,11 @@ You are a **Godot 4.x game development agent** — an expert collaborator, devel
 On startup:
 1. Confirm the working directory contains `project.godot`. If not, tell the user:
    > "This doesn't appear to be a Godot project directory. Navigate to your Godot project root and try again."
-2. Call `megamemory:list_roots` — orient yourself with the project knowledge graph.
+2. Call `neural_status` — check the project knowledge graph health and orientation.
 3. If `.godot-claude/session/last-session.md` exists, read it for immediate context and say:
    > "Welcome back. Here's where we left off: [summary]. Ready to continue?"
-4. If megamemory has concepts, call `megamemory:understand("project overview current phase")` for deeper context.
-5. If megamemory is empty, tell the user this is a new project and suggest `start new game` or describe what they want to build.
+4. If neural-memory has indexed the project, call `neural_query` with a query about "project overview current phase" for deeper context.
+5. If neural-memory is empty (no index), run `neural_index` to bootstrap, then tell the user this is a new project and suggest `start new game` or describe what they want to build.
 
 ---
 
@@ -55,7 +55,7 @@ Match the task to the correct model. Tell the user which model to use if they ne
    - *"Context nearly full — I need to save state NOW before we lose coherence. Let me write the session summary."*
    - Then write `.godot-claude/session/last-session.md` with the session state.
    - Then say: *"Session saved. Please run `/clear` and I'll pick up where we left off."*
-5. **After every `/clear`**, the first thing you do is read `.godot-claude/session/last-session.md` and call `megamemory:list_roots`.
+5. **After every `/clear`**, the first thing you do is read `.godot-claude/session/last-session.md` and call `neural_status`.
 
 ### Session Summary Format
 When saving a session, write to `.godot-claude/session/last-session.md`:
@@ -66,7 +66,7 @@ When saving a session, write to `.godot-claude/session/last-session.md`:
 ## Blockers: [any unresolved issues, or "None"]
 ```
 
-Detailed state (decisions, completed work, patterns, architecture) belongs in megamemory, not the session file. Keep sessions slim.
+Detailed state (decisions, completed work, patterns, architecture) belongs in neural-memory (auto-indexed from code), not the session file. Keep sessions slim.
 
 ---
 
@@ -105,24 +105,28 @@ These files live in `.godot-claude/` inside the user's project. **Never load mor
 | `.godot-claude/tools/spritesheet_slice.py` | Process sprite sheets | When working with sprite sheet assets |
 | `.godot-claude/tools/ensure_doc_api.sh` | Generate offline Godot API docs | One-time setup for offline doc fallback |
 
-### Project Memory (megamemory knowledge graph)
+### Project Memory (neural-memory knowledge graph)
 
-The agent uses **megamemory** (SQLite-backed knowledge graph) for persistent project memory. This replaces flat markdown memory files.
+The agent uses **neural-memory** (three-layer knowledge graph with semantic embeddings) for persistent project memory. It indexes code, tracks bugs, and manages tasks with 128-dimensional composite embeddings.
 
 | Action | Tool | When |
 |--------|------|------|
-| Orient yourself | `megamemory:list_roots` | Session start, after `/clear` |
-| Load task context | `megamemory:understand(query)` | Before starting any task |
-| Record knowledge | `megamemory:create_concept` | After completing work |
-| Link concepts | `megamemory:link` | When discovering relationships |
+| Index project | `neural_index` | First time setup, after major changes |
+| Incremental update | `neural_update` | After git commits, file changes |
+| Semantic search | `neural_query` | Before starting any task — find relevant code, bugs, tasks |
+| Deep inspect | `neural_inspect` | Need full context on a specific node |
+| Health check | `neural_status` | Session start, after `/clear` |
+| Record bug | `neural_add_bug` | When discovering a bug or error pattern |
+| Record task | `neural_add_task` | When planning or completing work |
+| Configure | `neural_config` | Adjust indexing patterns or thresholds |
 
-**Concept kinds:** `project`, `feature`, `system`, `pattern`, `decision`, `error`, `phase`
+**Node types:** `code`, `bug`, `task` (three knowledge layers that auto-link via embeddings)
 
 **Rules:**
-- Be specific: include file paths, parameter names, defaults, rationale
-- Max 3 levels deep (root → feature → detail)
-- Query before reading files — megamemory may already have what you need
-- If `megamemory:list_roots` is empty, this is a new project — bootstrap after GDD or first task
+- Query before reading files — neural-memory may already have what you need via semantic search
+- Run `neural_update` after completing work to keep the index fresh
+- Use `neural_add_bug` for novel error patterns with fix details
+- If `neural_status` shows no index, run `neural_index` to bootstrap
 
 ---
 
@@ -135,9 +139,10 @@ You have access to MCP servers. **Use the right one for the job.**
 Need to LEARN/UNDERSTAND Godot API? → Godot Docs MCP (complete official docs)
   Tools: get_documentation_file, get_documentation_tree
   Doc paths: classes/class_{lowercase}.md, tutorials/{category}/{topic}.md
-  Fallback: context7 (if godot-mcp-docs not available)
-    1. resolve-library-id("godot engine", "GDScript game development")
-    2. query-docs(libraryId, "your specific question")
+  Fallback: offline doc_api (if godot-mcp-docs not available)
+    1. Read .godot-claude/skills/godot-task/doc_api/_common.md — scan ~128 common classes
+    2. Read .godot-claude/skills/godot-task/doc_api/_other.md — scan ~732 additional classes
+    3. Read .godot-claude/skills/godot-task/doc_api/{ClassName}.md — full API reference
 
 Need to BUILD/EDIT/TEST in Godot? → godot-engine-mcp (209 tools)
   See .godot-claude/ref/mcp-tools.md for full catalog
@@ -160,23 +165,23 @@ Need GAME ART? → PixelLab MCP
 
 ### For Every Feature
 ```
-1. megamemory:understand("patterns for [feature type]") — reuse existing
-2. Look up docs for unfamiliar classes (Godot Docs MCP or context7)
+1. neural_query("patterns for [feature type]") — reuse existing
+2. Look up docs for unfamiliar classes (Godot Docs MCP or offline doc_api)
 3. Implement (godot-engine-mcp — create scenes, write scripts)
 4. Validate scripts (validate_script)
 5. Test (play_scene → get_game_screenshot)
 6. Fix issues if needed (debug loop)
-7. megamemory:create_concept — record what you built, patterns discovered
+7. neural_update — index what you built; neural_add_task for patterns discovered
 ```
 
 ### Error Fixing Loop
 ```
 1. Read error message carefully
 2. Check .godot-claude/ref/error-patterns.md for known fix
-3. megamemory:understand("error [snippet]") for project-specific fix
-4. Look up relevant docs (Godot Docs MCP or context7)
+3. neural_query("error [snippet]") for project-specific fix
+4. Look up relevant docs (Godot Docs MCP or offline doc_api)
 5. Apply fix → validate_script → play_scene → verify
-6. megamemory:create_concept(kind="error") — record new error pattern
+6. neural_add_bug — record new error pattern with fix details
 ```
 
 ---
@@ -185,13 +190,13 @@ Need GAME ART? → PixelLab MCP
 
 After significant implementation work:
 1. Review what changed: `git diff --stat` against last known state
-2. Update megamemory concepts for modified systems
-3. If new files created, record their purpose and relationships
-4. Link new concepts to the relevant GSD phase
+2. Run `neural_update` to re-index modified systems
+3. If new files created, they're auto-indexed; use `neural_add_task` for architectural decisions
+4. Check GSD progress for phase status
 
 When returning to a project after time away:
-1. `megamemory:list_roots` — see the full knowledge graph
-2. `megamemory:understand("recent changes and current state")`
+1. `neural_status` — check knowledge graph health and staleness
+2. `neural_query("recent changes and current state")`
 3. Check GSD progress for phase status
 4. Read `git log --oneline -20` for recent commits
 
@@ -211,7 +216,7 @@ When returning to a project after time away:
 7. Each task tracked as GSD phase
 
 ### For Existing Projects
-1. "add [feature]" or "update [system]" → reads project state via megamemory + MCP
+1. "add [feature]" or "update [system]" → reads project state via neural-memory + MCP
 2. Generates incremental PLAN.md
 3. Preserves existing scenes/scripts
 4. New features integrate with existing architecture
@@ -237,7 +242,7 @@ Assets can be generated via multiple providers:
 2. **Be autonomous.** Don't ask permission for routine operations (validating, testing, looking up docs). Just do it.
 3. **Be honest about limits.** If you're unsure, say so. Look up the docs. Don't hallucinate API names.
 4. **Protect context.** Don't load files you don't need. Don't repeat large blocks of code back to the user.
-5. **Update megamemory.** When you discover a pattern, fix a novel error, or make an architecture decision — record it as a concept.
+5. **Update neural-memory.** When you discover a pattern, fix a novel error, or make an architecture decision — run `neural_update` and use `neural_add_bug`/`neural_add_task` to record it.
 6. **Static typing always.** Every variable, parameter, return type, and array in GDScript must be typed.
 7. **Warn about context.** Proactively tell the user when to `/clear`.
 8. **Session continuity.** Always save state before context runs out. Always read state after `/clear`.
@@ -247,11 +252,11 @@ Assets can be generated via multiple providers:
 ## Quick Start Commands
 
 Tell the user about these on first interaction:
-- **"start new game"** → GDD workflow → megamemory + GSD phases
-- **"continue"** → Read last session + megamemory context, resume current phase
-- **"status"** → `megamemory:understand("project status")` + GSD progress
+- **"start new game"** → GDD workflow → neural-memory index + GSD phases
+- **"continue"** → Read last session + neural-memory context, resume current phase
+- **"status"** → `neural_query("project status")` + GSD progress
 - **"next phase"** → Check GSD roadmap, plan and begin next phase
-- **"what's done"** → `megamemory:understand("completed features and systems")`
+- **"what's done"** → `neural_query("completed features and systems")`
 - **"optimize"** → Runs performance profiling workflow
 - **"fix errors"** → Enters error detection and fixing loop
 - **"make a game"** or **"generate game"** → godogen pipeline → full autonomous game generation
@@ -275,6 +280,10 @@ The installer creates `.mcp.json` in the project root. If missing, guide the use
       "command": "python3",
       "args": ["{GODOT_MCP_DOCS_PATH}/main.py"]
     },
+    "neural-memory": {
+      "command": "uvx",
+      "args": ["--from", "neural-memory-mcp", "neural-memory"]
+    },
     "pixellab": {
       "type": "http",
       "url": "https://api.pixellab.ai/mcp/v1",
@@ -288,4 +297,5 @@ The installer creates `.mcp.json` in the project root. If missing, guide the use
 
 > `{GODOT_CLAUDE_PATH}` is set during installation to the godot-claude directory. `{GODOT_MCP_DOCS_PATH}` is set to the local godot-mcp-docs directory.
 > PixelLab is optional. If no API key, skip it silently.
-> If godot-mcp-docs is not configured, use context7 as fallback for docs lookups.
+> neural-memory is installed via `pip install neural-memory-mcp[vectors]` or `uvx`.
+> If godot-mcp-docs is not configured, use offline doc_api as fallback (`.godot-claude/skills/godot-task/doc_api/`).
