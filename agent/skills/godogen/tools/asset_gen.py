@@ -20,7 +20,8 @@ from google.genai import types
 from tripo3d import MODEL_V3, image_to_glb
 
 TOOLS_DIR = Path(__file__).parent
-TEMPLATE_SCRIPT = TOOLS_DIR / "spritesheet_template.py"
+SHARED_TOOLS_DIR = TOOLS_DIR.parent.parent.parent / "tools"  # .godot-claude/tools/
+TEMPLATE_SCRIPT = SHARED_TOOLS_DIR / "spritesheet_template.py"
 BUDGET_FILE = Path("assets/budget.json")
 
 
