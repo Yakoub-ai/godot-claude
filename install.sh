@@ -250,6 +250,16 @@ else
     warn "python3 not found — asset generation tools and docs server require Python 3.10+"
 fi
 
+# Check RTK (optional — token-optimized CLI proxy)
+step "Checking RTK…"
+if command -v rtk &>/dev/null; then
+    RTK_VER=$(rtk --version 2>&1 | head -1)
+    ok "RTK $RTK_VER found — token-optimized CLI available"
+else
+    warn "RTK not found (optional) — saves 60-90% tokens on dev operations."
+    echo -e "    Install: ${CYAN}https://github.com/rtk-ai/rtk${NC}"
+fi
+
 # Source files
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_SRC="$SOURCE_DIR/agent"
@@ -600,6 +610,58 @@ else
 .planning/
 EOF
     ok ".gitignore created"
+fi
+
+# Create neural-memory config with GDScript support
+NM_DIR="$PROJECT_PATH/.neural-memory"
+NM_CONFIG="$NM_DIR/config.json"
+if [ ! -f "$NM_CONFIG" ]; then
+    step "Creating neural-memory config with GDScript support…"
+    mkdir -p "$NM_DIR"
+    cat > "$NM_CONFIG" << 'EOF'
+{
+  "project_root": ".",
+  "index_mode": "both",
+  "languages": [
+    "auto"
+  ],
+  "include_patterns": [
+    "auto",
+    "**/*.gd",
+    "**/*.tscn",
+    "**/*.tres",
+    "**/*.cfg",
+    "**/*.gdshader"
+  ],
+  "exclude_patterns": [
+    "**/.git/**",
+    "**/.godot/**",
+    "**/.neural-memory/**",
+    "**/node_modules/**",
+    "**/build/**",
+    "**/__pycache__/**",
+    "**/.godot-claude/skills/godot-task/doc_api/**"
+  ],
+  "redaction": {
+    "enabled": true,
+    "builtin_patterns": true,
+    "sensitive_var_patterns": [
+      "(?i)(secret|password|passwd|pwd|token|api_key|apikey|auth|credential|private_key|access_key)"
+    ],
+    "custom_patterns": [],
+    "whitelist_vars": []
+  },
+  "max_summary_short_chars": 200,
+  "max_summary_detailed_chars": 1000,
+  "staleness_threshold": 5,
+  "importance_threshold": 0.2,
+  "lsp_enabled": true,
+  "lsp_servers": {}
+}
+EOF
+    ok "neural-memory config created with GDScript/TSCN/TRES/gdshader indexing"
+else
+    ok "neural-memory config already exists — skipped"
 fi
 
 # Done

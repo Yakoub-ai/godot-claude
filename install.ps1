@@ -245,6 +245,17 @@ if ($pythonCmd) {
     Write-Warn "Python 3 not found -- asset generation tools and docs server require Python 3.10+"
 }
 
+# --- Step 3d: Check RTK (optional -- token-optimized CLI proxy) ---
+Write-Step "Checking RTK..."
+$rtkCmd = Get-Command rtk -ErrorAction SilentlyContinue
+if ($rtkCmd) {
+    $rtkVer = & rtk --version 2>&1 | Select-Object -First 1
+    Write-Ok "RTK $rtkVer found -- token-optimized CLI available"
+} else {
+    Write-Warn "RTK not found (optional) -- saves 60-90% tokens on dev operations."
+    Write-Host "    Install: $($CYAN)https://github.com/rtk-ai/rtk$($RST)"
+}
+
 # --- Step 4: Locate source files ---
 $sourceDir = $PSScriptRoot
 $agentSrc  = Join-Path $sourceDir "agent"
@@ -610,6 +621,58 @@ if (Test-Path $gitignore) {
 .planning/
 "@ | Set-Content -Path $gitignore -Encoding UTF8
     Write-Ok ".gitignore created"
+}
+
+# --- Create neural-memory config with GDScript support ---
+$nmDir = Join-Path $projectPath ".neural-memory"
+$nmConfig = Join-Path $nmDir "config.json"
+if (-not (Test-Path $nmConfig)) {
+    Write-Step "Creating neural-memory config with GDScript support..."
+    if (-not (Test-Path $nmDir)) { New-Item -ItemType Directory -Path $nmDir -Force | Out-Null }
+    @"
+{
+  "project_root": ".",
+  "index_mode": "both",
+  "languages": [
+    "auto"
+  ],
+  "include_patterns": [
+    "auto",
+    "**/*.gd",
+    "**/*.tscn",
+    "**/*.tres",
+    "**/*.cfg",
+    "**/*.gdshader"
+  ],
+  "exclude_patterns": [
+    "**/.git/**",
+    "**/.godot/**",
+    "**/.neural-memory/**",
+    "**/node_modules/**",
+    "**/build/**",
+    "**/__pycache__/**",
+    "**/.godot-claude/skills/godot-task/doc_api/**"
+  ],
+  "redaction": {
+    "enabled": true,
+    "builtin_patterns": true,
+    "sensitive_var_patterns": [
+      "(?i)(secret|password|passwd|pwd|token|api_key|apikey|auth|credential|private_key|access_key)"
+    ],
+    "custom_patterns": [],
+    "whitelist_vars": []
+  },
+  "max_summary_short_chars": 200,
+  "max_summary_detailed_chars": 1000,
+  "staleness_threshold": 5,
+  "importance_threshold": 0.2,
+  "lsp_enabled": true,
+  "lsp_servers": {}
+}
+"@ | Set-Content -Path $nmConfig -Encoding UTF8
+    Write-Ok "neural-memory config created with GDScript/TSCN/TRES/gdshader indexing"
+} else {
+    Write-Ok "neural-memory config already exists -- skipped"
 }
 
 # --- Done ---

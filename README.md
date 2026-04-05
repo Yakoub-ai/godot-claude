@@ -16,7 +16,7 @@ godot-claude installs into your Godot project and turns Claude Code into an expe
 | **Debug errors** | 100+ known error patterns with automatic fixes, plus docs lookup |
 | **Optimize performance** | Profiling tools, manager patterns, pooling, MultiMesh guidance |
 | **Generate pixel art** | PixelLab MCP integration for characters, animations, tilesets |
-| **Remember across sessions** | megamemory knowledge graph persists architecture, decisions, and patterns |
+| **Remember across sessions** | neural-memory knowledge graph persists architecture, decisions, and patterns |
 | **Look up any Godot API** | 1,582 offline docs or cloud fallback via context7 |
 | **Generate complete games** | Godogen pipeline: describe a game → get a playable pixel art game |
 | **Track development phases** | GSD workflow for milestones, phases, and task execution |
@@ -30,18 +30,22 @@ godot-claude installs into your Godot project and turns Claude Code into an expe
                                 |
                     stdio (Model Context Protocol)
                                 |
-          +---------------------+---------------------+
-          |                     |                     |
-  godot-engine-mcp      godot-mcp-docs          PixelLab
-    (Node.js)              (Python)              (cloud)
-     209 tools           1,582 docs            pixel art
-          |                     |
-   WebSocket :6505        local file I/O
-          |                     |
-  Godot Editor Plugin    docs/ directory
-    (GDScript)           (RST → Markdown)
-          |
-    Godot 4.x Engine
+    +--------------+---------------+---------------+
+    |              |               |               |
+godot-engine   godot-mcp       neural-         PixelLab
+  -mcp          -docs          memory          (cloud)
+ (Node.js)    (Python)        (Python)        pixel art
+  209 tools  1,582 docs     knowledge graph
+    |              |               |
+WebSocket    local file I/O    SQLite +
+  :6505                       embeddings
+    |
+Godot Editor
+  Plugin
+ (GDScript)
+    |
+Godot 4.x
+  Engine
 ```
 
 ### Game Generation Pipeline (godogen)
@@ -74,7 +78,7 @@ Tools are organized into 23 **categories**. Four core categories (scene, node, s
 
 The agent maintains context across sessions through two mechanisms:
 
-- **megamemory** — A SQLite-backed knowledge graph (`.megamemory/`) that stores architecture decisions, discovered patterns, error fixes, and project state as linked concepts. Queried at session start and updated after each task.
+- **neural-memory** — A three-layer knowledge graph (`.neural-memory/`) with semantic embeddings that indexes code, tracks bugs, and manages tasks. Uses 128-dimensional composite embeddings for semantic search across code, bug, and task nodes. Queried at session start and updated after each task.
 - **Session files** — A slim handoff file (`.godot-claude/session/last-session.md`) that captures the current task, next steps, and blockers. Written before `/clear`, read after.
 
 Reference files in `.godot-claude/ref/` (error patterns, GDScript conventions, performance guides) are loaded on demand — never all at once — to protect the context window.
@@ -83,92 +87,160 @@ Reference files in `.godot-claude/ref/` (error patterns, GDScript conventions, p
 
 ## Prerequisites
 
-**Required:**
+Before installing, verify you have the following. The installer will check for these and tell you if anything is missing.
 
-| Dependency | Version | Purpose |
-|-----------|---------|---------|
-| [Claude Code](https://claude.ai/claude-code) | Latest | The AI agent interface (CLI only — no other interface is supported) |
-| [Godot](https://godotengine.org/) | 4.x | Game engine — editor must be running for engine tools to work |
-| [Node.js](https://nodejs.org/) | 18+ | Runs the godot-engine-mcp server |
+### Required
 
-**Optional:**
+**[Claude Code](https://claude.ai/claude-code)** — the AI agent CLI.
+```bash
+npm install -g @anthropic-ai/claude-code
+claude --version  # should print a version number
+```
 
-| Dependency | Version | Purpose |
-|-----------|---------|---------|
-| [Python](https://python.org/) | 3.10+ | Runs the offline documentation server & tool wrappers |
-| [pandoc](https://pandoc.org/) | Any | Converts Godot docs from RST to Markdown (one-time build) |
-| [PixelLab API key](https://pixellab.ai/) | -- | AI pixel art generation |
-| [Gemini API Key] | -- | `GOOGLE_API_KEY` for 2D asset generation & Visual QA |
-| [Tripo3D API Key] | -- | `TRIPO3D_API_KEY` for image-to-3D model conversion |
+**[Godot 4.x](https://godotengine.org/download/)** — the game engine. Must be running with the companion plugin active for engine tools to work.
+```bash
+godot --version   # should print 4.x.x
+```
+
+**[Node.js 18+](https://nodejs.org/)** — runs the `godot-engine-mcp` server.
+```bash
+node --version    # should print v18.x.x or higher
+```
+
+### Recommended (enables more features)
+
+**[Python 3.10+](https://python.org/)** — runs the offline documentation server, asset tools, and neural-memory.
+```bash
+python3 --version  # should print 3.10.x or higher
+```
+
+**[uv](https://docs.astral.sh/uv/)** — used to run the `neural-memory` MCP server. The installer will warn if it is missing.
+```bash
+# Install uv (macOS / Linux)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Verify
+uvx --version
+```
+> If `uv` is not installed, the installer will still complete but neural-memory won't start. Add it after and re-run the installer.
+
+**[neural-memory-mcp](https://github.com/Yakoub-ai/neural-memory)** — the knowledge graph. The installer installs this automatically via pip if Python is available.
+```bash
+# Installed automatically, but you can verify manually:
+python3 -c "import neural_memory; print('neural-memory OK')"
+```
+
+### Optional (unlocks game generation pipeline)
+
+| Dependency | Purpose | How to get |
+|-----------|---------|------------|
+| [pandoc](https://pandoc.org/) | Converts Godot docs to Markdown (one-time build) | `brew install pandoc` / package manager |
+| `PIXELLAB_API_KEY` | AI pixel art generation | [pixellab.ai](https://pixellab.ai) |
+| `GOOGLE_API_KEY` | 2D asset generation & Visual QA via Gemini | [Google AI Studio](https://aistudio.google.com/) |
+| `TRIPO3D_API_KEY` | Image-to-3D model conversion | [tripo3d.ai](https://tripo3d.ai) |
+| [RTK](https://github.com/rtk-ai/rtk) | Token-optimized CLI proxy (60-90% token savings) | See RTK repo |
 
 ---
 
 ## Installation
 
-### 1. Clone the repository
+### Step 1 — Clone the repository
 
 ```bash
 git clone https://github.com/Yakoub-ai/godot-claude.git
 cd godot-claude
 ```
 
-### 2. Run the installer
+### Step 2 — Run the installer
 
-The installer targets your Godot project directory. You can pass the path as an argument or run interactively (a folder picker dialog will open on supported systems).
+Point the installer at your Godot project directory. It will detect what's available and configure accordingly.
 
 **Linux / macOS:**
-
 ```bash
-cd godot-claude
 ./install.sh /path/to/your/godot-project
 ```
 
 **Windows (PowerShell):**
-
 ```powershell
-cd godot-claude
 pwsh install.ps1 -ProjectPath "C:\Games\MyProject"
 ```
+> Works with PowerShell 7+ (`pwsh`) or Windows PowerShell 5.1: `powershell -ExecutionPolicy Bypass -File install.ps1 -ProjectPath "C:\Games\MyProject"`
 
-> **Note:** The installer works with both PowerShell 7+ (`pwsh`) and Windows PowerShell 5.1 (`powershell`). Colors are only shown on PowerShell 7+. If you don't have `pwsh`, you can run: `powershell -ExecutionPolicy Bypass -File install.ps1 -ProjectPath "C:\Games\MyProject"`
-
-**Interactive mode** (no path argument):
-
+**Interactive mode** (folder picker opens if no path is given):
 ```bash
 ./install.sh
-# or
-pwsh install.ps1
 ```
 
-If you point the installer at a parent directory, it will find all `project.godot` files within two levels and let you choose.
+If you point it at a parent directory, it finds all `project.godot` files within two levels and lets you choose.
 
-### 3. What the installer does
+### Step 3 — What the installer sets up
 
-1. Validates that the target directory contains `project.godot`
-2. Checks that Node.js 18+ is installed
-3. Builds the godot-engine-mcp server (`npm ci` + `npm run build` in `server/`)
-4. Copies agent files to `.godot-claude/` in your project
-5. Creates a project-level `CLAUDE.md` if one does not exist (never overwrites yours)
-6. Optionally builds offline Godot docs (prompts if Python 3 and pandoc are available)
-7. Creates `.mcp.json` with server configuration
-8. Updates `.gitignore` to exclude local state (memory, sessions, megamemory)
+The installer checks each component and tells you its status. Here's what it does and why:
+
+| Step | What happens | Why it matters |
+|------|-------------|----------------|
+| **Node.js check** | Fails with instructions if Node < 18 | Required to build and run `godot-engine-mcp` |
+| **Build godot-engine-mcp** | `npm ci && npm run build` in `server/` | Compiles the TypeScript MCP server — the core engine control layer |
+| **Godot CLI check** | Warns if `godot` not on PATH | Needed for headless scene/script generation |
+| **Python check** | Warns if Python 3 missing | Required for docs server, asset tools, and neural-memory |
+| **neural-memory install** | `pip install neural-memory-mcp[vectors]` | Installs the knowledge graph with embedding support |
+| **uv check** | Warns with install instructions if missing | `uvx` is how `.mcp.json` starts the neural-memory server |
+| **RTK check** | Warns with install link if missing | Optional — saves tokens on verbose CLI commands |
+| **Copy agent files** | Copies `agent/*` → `.godot-claude/` in your project | Installs reference docs, skills, and memory stubs |
+| **Create CLAUDE.md** | Adds project-level `CLAUDE.md` if missing | Never overwrites yours — gives Claude project context |
+| **Create `.mcp.json`** | Writes server config for all detected servers | Connects Claude Code to all MCP servers |
+| **Create neural-memory config** | Writes `.neural-memory/config.json` with Godot patterns | Ensures `.gd`, `.tscn`, `.tres`, `.gdshader` files are indexed |
+| **Update `.gitignore`** | Excludes memory, sessions, neural-memory, planning dirs | Prevents local agent state from being committed |
 
 On re-install, your memory, session data, and project `CLAUDE.md` are preserved.
 
-### 4. Install the Godot Plugin
+### Step 4 — Enable the Godot plugin
 
-Copy the `addons` folder from the `godot-claude` repository into your Godot project's root directory. The folder should be placed so that it is available at `res://addons/godot-claude` (or similar, depending on the exact plugin folder name).
+The installer copies the plugin automatically. You still need to activate it inside Godot:
 
-Then, open your Godot project, go to **Project > Project Settings > Plugins**, and activate the MCP plugin.
+1. Open your Godot project
+2. Go to **Project → Project Settings → Plugins**
+3. Find **godot_mcp** and set it to **Enable**
 
-### 5. Start Claude Code
+The plugin opens a WebSocket server on port `6505` that `godot-engine-mcp` connects to. Without it, all engine tools (create scene, add node, play scene, etc.) will fail.
+
+### Step 5 — Verify the installation
+
+Run these checks to confirm everything is working:
+
+```bash
+# 1. MCP server builds without error
+node /path/to/godot-claude/server/build/index.js --version 2>&1 || echo "Build failed"
+
+# 2. neural-memory is importable
+python3 -c "import neural_memory; print('neural-memory OK')"
+
+# 3. uvx can find the neural-memory package
+uvx --from neural-memory-mcp neural-memory --version 2>&1 | head -3
+
+# 4. Claude Code picks up the MCP config
+cd /path/to/your/godot-project
+claude --mcp-debug 2>&1 | grep -E "neural-memory|godot-engine|godot-mcp"
+```
+
+If any check fails, the most common fixes:
+
+| Problem | Fix |
+|---------|-----|
+| `uvx: command not found` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` then restart shell |
+| `import neural_memory` fails | `pip install 'neural-memory-mcp[vectors]'` |
+| `node build/index.js` fails | Re-run installer — it rebuilds via `npm ci && npm run build` |
+| No MCP servers in Claude | Check `.mcp.json` exists at project root; re-run installer |
+| Engine tools fail | Confirm Godot editor is open with `godot_mcp` plugin enabled |
+
+### Step 6 — Start Claude Code
 
 ```bash
 cd /path/to/your/godot-project
 claude
 ```
 
-Claude reads `.godot-claude/CLAUDE.md` on startup and becomes your Godot agent.
+Claude reads `.godot-claude/CLAUDE.md` on startup and becomes your Godot agent. On first run, say `neural index` to build the knowledge graph of your project.
 
 ---
 
@@ -192,7 +264,7 @@ YourProject/
     │   ├── pixellab.md            #   Asset generation pipeline
     │   ├── gdd-workflow.md        #   Interactive game creation stages
     │   └── docs-index.md          #   Godot docs path index
-    ├── memory/                    # Stubs (megamemory used for persistent knowledge)
+    ├── memory/                    # Stubs (neural-memory used for persistent knowledge)
     └── session/
         └── last-session.md        # Session state for continuity across /clear
 ```
@@ -208,7 +280,7 @@ Once Claude Code is running in your project, use natural language:
 | Say this | What happens |
 |----------|-------------|
 | `start new game` | Interactive 9-stage GDD workflow, then scaffolds the project |
-| `continue` | Resume from last session and megamemory context |
+| `continue` | Resume from last session and neural-memory context |
 | `status` | Show project state and development progress |
 | `next phase` | Plan and begin the next development phase |
 | `what's done` | List completed features and systems |
@@ -228,30 +300,6 @@ Different tasks benefit from different models. The agent will suggest switching 
 | Development, features, bug fixes | Sonnet (default) | `claude` |
 | Documentation, comments | Haiku | `claude --model haiku` |
 | Changelogs, version bumps | Haiku | `claude --model haiku` |
-
----
-
-## Autoresearch Framework (Self-Improving Agent)
-
-`godot-claude` ships with a `Karpathy`-inspired autoresearch system. This framework isolates the agent in a test sandbox and grades its game generation logic against a fitness function, enabling you to optimize the agent's prompts and orchestration skills overnight.
-
-### How to run the Autoresearch Evaluation:
-
-1. **Prepare the sandbox:**
-   ```bash
-   cd godot-claude
-   python3 autoresearch/prepare.py
-   ```
-   *This generates a clean Godot sandbox at `/tmp/godot_autoresearch_sandbox/` and automatically installs the MCP plugins into it.*
-
-2. **Run the training loop:**
-   ```bash
-   python3 autoresearch/train.py
-   ```
-   *This initiates an automated headless Claude session that will attempt to build an entire game within a strict 5-minute timeout. It evaluates success (Visual QA / Error Count / Completion Status) and prints a fitness SCORE.*
-
-3. **Provide optimization logic:** 
-   Edit `autoresearch/program.md` to instruct the meta-agent on what files to rewrite (e.g., `agent/skills/godogen/decomposer.md`) to minimize errors and improve the codebase autonomously.
 
 ---
 
@@ -307,7 +355,7 @@ The godot-engine-mcp server organizes its 209 tools into 23 categories. Four cor
 
 ## MCP Servers
 
-godot-claude uses three MCP servers, configured in `.mcp.json`:
+godot-claude uses four MCP servers, configured in `.mcp.json`:
 
 ### godot-engine-mcp (required)
 
@@ -325,6 +373,17 @@ Offline documentation server for the complete Godot 4.x API. Written in Python, 
 - `get_documentation_file` — retrieve a specific doc (e.g., `classes/class_node2d.md`)
 
 Covers 1,582 documentation files including all classes, tutorials, and guides. Requires a one-time build step (Python 3.10+, pandoc) that the installer can handle.
+
+### neural-memory (included)
+
+Three-layer knowledge graph that provides persistent project memory across sessions. Indexes code, tracks bugs, and manages tasks using 128-dimensional semantic embeddings stored in SQLite.
+
+- `neural_index` — build the knowledge graph from the codebase
+- `neural_query` — semantic search across code, bugs, and tasks
+- `neural_update` — incremental re-index after changes
+- `neural_add_bug` / `neural_add_task` / `neural_insight` — record findings manually
+
+Data persists in `.neural-memory/` and survives context clears. Installed automatically by the installer via `pip install neural-memory-mcp[vectors]`.
 
 ### context7 (automatic fallback)
 
@@ -360,9 +419,9 @@ The agent actively protects your context window to maintain coherence during lon
 
 - **At ~60% context usage** — warns you to consider running `/clear` soon
 - **At ~80% context usage** — saves session state to `.godot-claude/session/last-session.md` and tells you to `/clear` now
-- **After `/clear`** — reads the session file and queries megamemory, then resumes where you left off
+- **After `/clear`** — reads the session file and queries neural-memory, then resumes where you left off
 
-Session files are kept slim (current task, next steps, blockers). Detailed knowledge — architecture decisions, discovered patterns, error fixes — is stored in the megamemory knowledge graph, which persists in `.megamemory/` and survives context clears.
+Session files are kept slim (current task, next steps, blockers). Detailed knowledge — architecture decisions, discovered patterns, error fixes — is stored in the neural-memory knowledge graph, which persists in `.neural-memory/` and survives context clears.
 
 Reference files in `.godot-claude/ref/` are loaded on demand, never all at once. The agent reads only what the current task requires.
 
@@ -370,7 +429,7 @@ Reference files in `.godot-claude/ref/` are loaded on demand, never all at once.
 
 ## Updating
 
-Re-run the installer to update agent files and reference docs. Your project `CLAUDE.md`, megamemory data, and session state are preserved automatically.
+Re-run the installer to update agent files and reference docs. Your project `CLAUDE.md`, neural-memory data, and session state are preserved automatically.
 
 ```bash
 cd godot-claude

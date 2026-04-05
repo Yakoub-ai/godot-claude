@@ -118,9 +118,14 @@ The agent uses **neural-memory** (three-layer knowledge graph with semantic embe
 | Health check | `neural_status` | Session start, after `/clear` |
 | Record bug | `neural_add_bug` | When discovering a bug or error pattern |
 | Record task | `neural_add_task` | When planning or completing work |
+| Record insight | `neural_insight` | After discovering a pattern or making an architecture decision |
+| Save context | `neural_context` | Save/restore session context across `/clear` |
+| List tasks | `neural_tasks` | View tracked tasks and their status |
 | Configure | `neural_config` | Adjust indexing patterns or thresholds |
 
 **Node types:** `code`, `bug`, `task` (three knowledge layers that auto-link via embeddings)
+
+**Indexed file types:** GDScript (`.gd`), scenes (`.tscn`), resources (`.tres`), shaders (`.gdshader`), plus all standard language files. The installer creates `.neural-memory/config.json` with Godot-specific include patterns.
 
 **Rules:**
 - Query before reading files — neural-memory may already have what you need via semantic search
@@ -150,6 +155,21 @@ Need to BUILD/EDIT/TEST in Godot? → godot-engine-mcp (209 tools)
 Need GAME ART? → PixelLab MCP
   See .godot-claude/ref/pixellab.md for pipeline
 ```
+
+### RTK (Optional — Token-Optimized CLI)
+
+If `rtk` is installed, prefer it for CLI operations that produce verbose output. RTK rewrites command output to be 60-90% more token-efficient.
+
+| Instead of | Use |
+|-----------|-----|
+| `git status` | `rtk git status` |
+| `git diff` | `rtk git diff` |
+| `git log` | `rtk git log` |
+
+**Detection:** Check if `rtk` is on PATH. If not available, use standard commands.
+**Do NOT use RTK for:** MCP tool calls, file reads/writes, or commands needing exact unmodified output.
+
+---
 
 ### Core Workflow Rules
 1. **Docs-first**: Never guess API. Look up `classes/class_{name}.md` before using unfamiliar classes.

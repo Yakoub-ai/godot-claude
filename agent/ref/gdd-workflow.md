@@ -126,8 +126,8 @@ Customize phases to the specific game. Each phase should be completable in 2-3 f
 
 When the user has an existing project instead of starting from scratch:
 
-1. Call `megamemory:list_roots` — check for existing knowledge graph
-2. If megamemory has concepts: `megamemory:understand("project overview and current state")`
+1. Call `neural_status` — check knowledge graph health and existing index
+2. If neural-memory has an index: `neural_query("project overview and current state")`
 3. Analyze existing project structure via MCP: `get_project_info`, `list_scenes`, `list_scripts`
 4. Identify what's already built vs. what's missing
 5. Create an incremental plan that builds on existing work
@@ -185,10 +185,9 @@ Phase plan from Stage 9 with acceptance criteria.
 
 Once all documents are generated:
 
-1. **Record to megamemory:**
-   - `megamemory:create_concept(name="[Game Name]", kind="project", summary="...")`
-   - Child concepts for: `tech_stack`, `entities`, `systems`, `art_plan`, `performance_budget`
-   - Link related concepts (entities → systems that use them)
+1. **Record to neural-memory:**
+   - Run `neural_index` to auto-index the new project scaffold
+   - Use `neural_add_task` to record each phase from ROADMAP.md
 
 2. **Create project scaffold** via godot-engine-mcp:
    - Set project settings (viewport, stretch, filter)
@@ -200,7 +199,7 @@ Once all documents are generated:
    - Generate required assets from ASSETS.md (PixelLab)
    - Implement scenes and scripts
    - Validate and test
-   - Update megamemory with completed work
+   - Run `neural_update` to re-index completed work
 
 ---
 
@@ -209,7 +208,7 @@ Once all documents are generated:
 If the user already has planning docs (PLAN.md, STRUCTURE.md, ASSETS.md, ROADMAP.md), skip the Q&A stages entirely:
 
 1. Read all planning docs
-2. Record to megamemory if not already there
+2. Run `neural_index` if not already indexed (check via `neural_status`)
 3. Determine current phase from ROADMAP.md
 4. Begin implementation directly
 

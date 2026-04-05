@@ -17,4 +17,4 @@ Thumbs.db
 # Planning documents (local)
 docs/plans/
 .claude/
-.megamemory/
+.neural-memory/
