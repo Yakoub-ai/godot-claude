@@ -18,3 +18,5 @@ Thumbs.db
 docs/plans/
 .claude/
 .neural-memory/
+*.log
+/.remember
