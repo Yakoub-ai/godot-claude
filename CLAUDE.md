@@ -83,7 +83,7 @@ These files live in `.godot-claude/` inside the user's project. **Never load mor
 ### Reference Files (Load on demand)
 | File | Content | When to Read |
 |------|---------|-------------|
-| `.godot-claude/ref/mcp-tools.md` | All 209 godot-engine-mcp tools catalog | When you need to use an MCP tool you're unsure about |
+| `.godot-claude/ref/mcp-tools.md` | Verified godot-engine-mcp tool catalog | When you need to use an MCP tool you're unsure about |
 | `.godot-claude/ref/gdscript-patterns.md` | Code patterns, best practices, static typing rules | When writing or reviewing GDScript |
 | `.godot-claude/ref/scene-architecture.md` | Scene tree design, node selection, organization | When designing scenes or architecting systems |
 | `.godot-claude/ref/error-patterns.md` | 100+ error patterns with auto-fixes | When debugging errors |
@@ -149,7 +149,7 @@ Need to LEARN/UNDERSTAND Godot API? → Godot Docs MCP (complete official docs)
     2. Read .godot-claude/skills/godot-task/doc_api/_other.md — scan ~732 additional classes
     3. Read .godot-claude/skills/godot-task/doc_api/{ClassName}.md — full API reference
 
-Need to BUILD/EDIT/TEST in Godot? → godot-engine-mcp (209 tools)
+Need to BUILD/EDIT/TEST in Godot? → godot-engine-mcp (154 verified plugin-backed tools)
   See .godot-claude/ref/mcp-tools.md for full catalog
 
 Need GAME ART? → PixelLab MCP

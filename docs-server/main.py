@@ -37,7 +37,7 @@ def main():
             logger.warning("Documentation directory not found or empty. Some tools may not work properly.")
             logger.warning("Please run 'python docs_converter/godot_docs_converter.py' to download and convert documentation.")
 
-        logger.info("Documentation directory is ready for you my love <3.")
+        logger.info("Documentation directory is ready.")
 
         mcp.run(transport="stdio")
     except KeyboardInterrupt:

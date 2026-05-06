@@ -1,10 +1,10 @@
 # godot-engine-mcp — Tool Catalog
 
-209 tools across 23 categories for direct Godot engine manipulation via Claude Code.
+154 verified plugin-backed tools across 19 active categories for direct Godot engine manipulation via Claude Code.
 Connection: Claude Code ←MCP→ Node.js Server ←WebSocket:6505→ Godot Editor Plugin
 
 Core categories (always loaded): scene, node, script, editor
-Extended categories (on-demand): call `enable_category` to load
+Extended categories (on-demand): animation, audio, batch, docs, input, navigation, particles, physics, profiling, project, rendering, resources, runtime, tilemap, ui
 
 Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_status`
 
@@ -42,7 +42,7 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `set_node_groups` | Set node groups (replaces current) |
 | `find_nodes_in_group` | Find all nodes in a group |
 
-## Script (8 tools)
+## Script (7 tools)
 | Tool | Purpose |
 |------|---------|
 | `list_scripts` | List all GDScript/C#/shader files in the project |
@@ -50,7 +50,6 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `create_script` | Create a new GDScript file with content or a template |
 | `edit_script` | Edit a script via search-replace, full replace, or line insert |
 | `attach_script` | Attach a GDScript file to a node in the scene |
-| `detach_script` | Remove a script from a node |
 | `validate_script` | Validate a GDScript file by compiling it |
 | `get_open_scripts` | List all scripts currently open in the Godot script editor |
 
@@ -86,7 +85,7 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `set_blend_tree_node` | Add or replace a node in a BlendTree state |
 | `set_tree_parameter` | Set a parameter on the AnimationTree |
 
-## Audio (8 tools)
+## Audio (6 tools)
 | Tool | Purpose |
 |------|---------|
 | `get_audio_bus_layout` | Get the full audio bus layout including all buses, volumes, and effects |
@@ -95,8 +94,6 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `add_audio_bus_effect` | Add an audio effect to a bus |
 | `add_audio_player` | Add an AudioStreamPlayer node to the scene tree |
 | `get_audio_info` | Get audio setup information for a node subtree |
-| `remove_audio_bus` | Remove an audio bus by name |
-| `remove_audio_bus_effect` | Remove an audio effect from a bus by its index |
 
 ## Batch (8 tools)
 | Tool | Purpose |
@@ -110,31 +107,15 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `analyze_scene_complexity` | Analyze a scene's complexity: node count, nesting depth, potential issues |
 | `get_project_statistics` | Get overall project statistics: file counts, script lines, autoloads |
 
-## Debugger (10 tools)
-| Tool | Purpose |
-|------|---------|
-| `set_breakpoint` | Set or remove a breakpoint in a GDScript file |
-| `get_breakpoints` | Get all currently set breakpoints across all scripts |
-| `clear_breakpoints` | Clear all breakpoints, optionally filtered to a specific file |
-| `get_stack_trace` | Get the current call stack when paused at a breakpoint |
-| `get_stack_variables` | Get local and member variables at a specific stack frame when paused |
-| `debug_continue` | Continue game execution after hitting a breakpoint |
-| `debug_step` | Step execution when paused at a breakpoint |
-| `evaluate_expression` | Evaluate a GDScript expression in the current debug context |
-| `get_debug_state` | Get the current debugger state: running, paused, breakpoint info |
-| `watch_expression` | Add or remove a watch expression evaluated each time the debugger pauses |
-
-## Docs (6 tools)
+## Docs (4 tools)
 | Tool | Purpose |
 |------|---------|
 | `find_unused_resources` | Scan the project for resource files not referenced by any file |
 | `analyze_signal_flow` | Map all signal connections in the currently edited scene |
 | `find_script_references` | Find all places where a script, class_name, or resource is referenced |
 | `detect_circular_dependencies` | Check for circular scene dependencies |
-| `get_class_info` | Get class documentation: methods, properties, signals, enums, inheritance |
-| `search_class_api` | Search across all Godot classes for methods, properties, or signals |
 
-## Input (8 tools)
+## Input (7 tools)
 | Tool | Purpose |
 |------|---------|
 | `simulate_key` | Simulate a keyboard key press/release |
@@ -144,21 +125,8 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `simulate_sequence` | Execute a sequence of input events with optional frame delays |
 | `get_input_actions` | Get all input actions defined in the project Input Map |
 | `set_input_action` | Create or update an input action in the project Input Map |
-| `remove_input_action` | Remove an input action from the project input map |
 
-## Localization (8 tools)
-| Tool | Purpose |
-|------|---------|
-| `get_translations` | Get all translation files configured in the project |
-| `add_translation` | Add a translation file to the project's translation list |
-| `remove_translation` | Remove a translation file from the project |
-| `set_translation_key` | Set a translation key-value pair for a specific locale |
-| `get_translation_keys` | Get all translation keys and values for a specific locale |
-| `get_locale` | Get the current locale setting and list of available locales |
-| `set_locale` | Set the current locale for the running game |
-| `create_translation_csv` | Create a translation CSV file with headers for specified locales |
-
-## Navigation (6 tools)
+## Navigation (5 tools)
 | Tool | Purpose |
 |------|---------|
 | `setup_navigation_region` | Add a NavigationRegion2D/3D child to a node with auto-created mesh |
@@ -166,21 +134,8 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `setup_navigation_agent` | Add a NavigationAgent2D/3D child and configure pathfinding/avoidance |
 | `set_navigation_layers` | Set navigation layers for a NavigationRegion or NavigationAgent |
 | `get_navigation_info` | Get navigation setup info for a node and its subtree |
-| `get_navigation_path` | Calculate a navigation path between two points |
 
-## Networking (8 tools)
-| Tool | Purpose |
-|------|---------|
-| `setup_multiplayer` | Setup a multiplayer peer (ENet or WebSocket server/client) |
-| `get_multiplayer_info` | Get current multiplayer state: peer type, unique ID, connected peers |
-| `get_connected_peers` | Get list of all connected peer IDs with their connection info |
-| `disconnect_peer` | Disconnect a specific peer from the multiplayer session |
-| `configure_rpc` | Configure RPC settings for a node method |
-| `send_rpc` | Send an RPC call to a method on a node |
-| `get_network_stats` | Get network statistics: bandwidth, packet counts, latency per peer |
-| `close_multiplayer` | Close the current multiplayer connection and clean up peers |
-
-## Particles (6 tools)
+## Particles (5 tools)
 | Tool | Purpose |
 |------|---------|
 | `create_particles` | Add a GPUParticles2D or GPUParticles3D node with a ParticleProcessMaterial |
@@ -188,9 +143,8 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `set_particle_color_gradient` | Set a color ramp (gradient) on a particle system's material |
 | `apply_particle_preset` | Apply a named particle preset: explosion, fire, smoke, sparks, rain, snow, magic, dust |
 | `get_particle_info` | Get the full configuration of a particle system |
-| `remove_particles` | Remove a GPUParticles2D/3D node from the scene |
 
-## Physics (8 tools)
+## Physics (6 tools)
 | Tool | Purpose |
 |------|---------|
 | `setup_collision` | Add a CollisionShape2D or CollisionShape3D to a physics body node |
@@ -199,28 +153,12 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `add_raycast` | Add a RayCast2D or RayCast3D node as a child |
 | `setup_physics_body` | Configure physics properties on a CharacterBody or RigidBody |
 | `get_collision_info` | Get detailed collision information for a node |
-| `setup_area` | Configure properties on an Area2D or Area3D node |
-| `get_physics_body_info` | Get complete physics body information including type, shapes, layers |
 
-## Plugins (6 tools)
-| Tool | Purpose |
-|------|---------|
-| `list_plugins` | List all editor plugins with their enabled/disabled status |
-| `enable_plugin` | Enable an editor plugin by its folder name |
-| `disable_plugin` | Disable an editor plugin by its folder name |
-| `get_plugin_info` | Get detailed information about an editor plugin |
-| `create_plugin_scaffold` | Create a new editor plugin scaffold with plugin.cfg and main script |
-| `get_addon_files` | List all files in an addon/plugin directory |
-
-## Profiling (6 tools)
+## Profiling (2 tools)
 | Tool | Purpose |
 |------|---------|
 | `get_performance_monitors` | Get all Godot performance monitors (FPS, memory, draw calls, etc.) |
 | `get_editor_performance` | Get a quick performance summary (FPS, frame time, memory) |
-| `profile_frames` | Profile frame times over a duration |
-| `get_memory_info` | Get detailed memory usage breakdown |
-| `detect_bottlenecks` | Analyze game performance and detect bottlenecks |
-| `get_render_info` | Get rendering pipeline information: draw calls, vertices, objects |
 
 ## Project (10 tools)
 | Tool | Purpose |
@@ -252,17 +190,13 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `set_shader_param` | Set a shader parameter on a node's ShaderMaterial |
 | `get_shader_params` | Get all shader parameters and their current values |
 
-## Resources (8 tools)
+## Resources (4 tools)
 | Tool | Purpose |
 |------|---------|
 | `read_resource` | Read a .tres resource file and return its properties |
 | `edit_resource` | Edit properties of an existing .tres resource file |
 | `create_resource` | Create a new .tres resource file of a given type |
 | `get_resource_preview` | Get a visual preview of an image or texture resource as PNG |
-| `duplicate_resource` | Duplicate a resource file to a new path |
-| `list_resource_properties` | List all configurable properties of a Godot resource type |
-| `get_resource_dependencies` | Get all resources that a given resource depends on |
-| `rename_resource` | Rename or move a resource file, optionally updating all references |
 
 ## Runtime (18 tools)
 | Tool | Purpose |
@@ -286,7 +220,7 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `move_to` | Autopilot the player to a target position or node |
 | `batch_get_properties` | Get properties of multiple nodes in the running game in a single call |
 
-## Tilemap (8 tools)
+## Tilemap (6 tools)
 | Tool | Purpose |
 |------|---------|
 | `tilemap_set_cell` | Set a single cell in a TileMapLayer |
@@ -295,10 +229,8 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `tilemap_clear` | Clear all cells in a TileMapLayer |
 | `tilemap_get_info` | Get information about a TileMapLayer including its TileSet and config |
 | `tilemap_get_used_cells` | Get a list of all used (non-empty) cells in a TileMapLayer |
-| `tilemap_set_pattern` | Set a pattern of tiles relative to a starting position |
-| `tilemap_erase_rect` | Erase all tiles in a rectangular region of a TileMapLayer |
 
-## UI (9 tools)
+## UI (6 tools)
 | Tool | Purpose |
 |------|---------|
 | `create_theme` | Create a Theme resource and save it to disk |
@@ -307,6 +239,3 @@ Meta-tools: `list_categories`, `enable_category`, `disable_category`, `server_st
 | `set_theme_font_size` | Set a theme font size override on a Control node |
 | `set_theme_stylebox` | Set a StyleBoxFlat override on a Control node |
 | `get_theme_info` | Get theme information for a Control node including overrides |
-| `create_control` | Create a Control node (Button, Label, LineEdit, etc.) |
-| `setup_container` | Create or configure a container node (VBox, HBox, Grid, Margin, etc.) |
-| `get_control_info` | Get detailed info about a Control node: size, anchors, margins, theme |

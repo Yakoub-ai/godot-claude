@@ -1,0 +1,82 @@
+Godot Claude Noncommercial Source License
+
+Copyright (c) 2026 Yakoub-ai
+
+This license allows noncommercial use, study, modification, and redistribution
+of this software while prohibiting resale and commercial exploitation without
+separate written permission from Yakoub-ai.
+
+1. Definitions
+
+"Software" means this repository, including source code, documentation,
+installers, agent files, skills, reference material, and bundled Godot MCP
+plugin files.
+
+"Noncommercial" means use that is not primarily intended for commercial
+advantage, monetary compensation, resale, paid service delivery, paid hosting,
+or inclusion in a commercial product or paid bundle.
+
+"Resale" means selling, licensing for a fee, paid redistribution, paid hosting,
+marketplace listing, paid SaaS access, or packaging the Software or a
+substantially similar version as a paid product or service.
+
+2. Permissions
+
+Subject to the terms of this license, you may:
+
+- Use the Software for personal, educational, research, internal evaluation,
+  hobby, and other noncommercial purposes.
+- Copy and modify the Software for noncommercial purposes.
+- Redistribute source or modified source for noncommercial purposes, provided
+  that this license and all attribution notices are preserved.
+- Use the Software to create games and Godot project prototypes, provided the
+  Software itself is not resold, sublicensed, or offered as a paid product or
+  service.
+
+3. No Resale and Other Restrictions
+
+You may not, without separate written permission from Yakoub-ai:
+
+- Sell, rent, lease, sublicense, host for a fee, or otherwise resell the
+  Software.
+- Offer the Software or a substantially similar modified version as a paid
+  product, paid service, paid plugin, paid marketplace item, paid template, or
+  paid development toolkit.
+- Use the Software in a commercial service, commercial product, agency delivery,
+  consulting package, or other revenue-generating workflow.
+- Remove, obscure, or misrepresent Yakoub-ai attribution notices.
+- Use Yakoub-ai names, logos, or trademarks to imply endorsement beyond the
+  credit required by this license.
+
+4. Required Credit
+
+Redistributions, modified versions, generated templates, public demos, videos,
+articles, repositories, and distributed games that materially use this Software
+must include the credit:
+
+Built with Yakoub-ai
+
+For games or applications, place the credit in a reasonable location such as
+credits, about screen, documentation, README, store page, or website. For source
+redistributions, keep the credit in the README or equivalent project
+documentation.
+
+5. Third-Party Components
+
+This repository may reference or interoperate with third-party software,
+services, APIs, documentation, and assets. Those components remain subject to
+their own licenses and terms. This license applies only to the Software owned by
+Yakoub-ai and does not grant rights to third-party materials.
+
+6. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR
+A PARTICULAR PURPOSE, TITLE, AND NONINFRINGEMENT. IN NO EVENT SHALL YAKOUB-AI
+OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING
+FROM OR RELATED TO THE SOFTWARE OR ITS USE.
+
+7. Commercial Licensing
+
+Commercial use, resale, paid redistribution, hosted service use, or integration
+into a commercial product requires separate written permission from Yakoub-ai.

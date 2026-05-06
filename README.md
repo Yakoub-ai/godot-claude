@@ -2,7 +2,7 @@
 
 An AI agent for Godot 4.x game development, powered by Claude Code (CLI).
 
-godot-claude installs into your Godot project and turns Claude Code into an expert game development collaborator. It provides direct engine control through 209 MCP tools, offline documentation for the full Godot API, persistent project memory, and structured development workflows — all from the command line.
+godot-claude installs into your Godot project and turns Claude Code into an expert game development collaborator. It provides direct engine control through 154 verified MCP tools, offline documentation for the full Godot API, persistent project memory, and structured development workflows — all from the command line.
 
 ---
 
@@ -10,7 +10,7 @@ godot-claude installs into your Godot project and turns Claude Code into an expe
 
 | Capability | How It Works |
 |-----------|--------------|
-| **Build scenes and nodes** | 209 tools for direct Godot editor manipulation via WebSocket |
+| **Build scenes and nodes** | 154 verified tools for direct Godot editor manipulation via WebSocket |
 | **Write GDScript** | Script creation, editing, and validation with enforced static typing |
 | **Architect games** | Interactive GDD workflow produces a structured development plan |
 | **Debug errors** | 100+ known error patterns with automatic fixes, plus docs lookup |
@@ -35,7 +35,7 @@ godot-claude installs into your Godot project and turns Claude Code into an expe
 godot-engine   godot-mcp       neural-         PixelLab
   -mcp          -docs          memory          (cloud)
  (Node.js)    (Python)        (Python)        pixel art
-  209 tools  1,582 docs     knowledge graph
+  154 tools  1,582 docs     knowledge graph
     |              |               |
 WebSocket    local file I/O    SQLite +
   :6505                       embeddings
@@ -66,9 +66,9 @@ User: "make a pixel art platformer"
 
 ### How it works
 
-**godot-engine-mcp** is the core. It is a TypeScript MCP server that exposes 209 tools for controlling the Godot editor. Claude Code connects to it over stdio. Internally, it opens a WebSocket server on port 6505 and waits for the Godot editor to connect via a companion GDScript plugin. When Claude calls a tool (e.g., `create_scene`, `add_node`, `validate_script`), the server sends a JSON-RPC 2.0 request over WebSocket, the plugin executes it in the editor, and the result comes back.
+**godot-engine-mcp** is the core. It is a TypeScript MCP server that exposes 154 plugin-backed tools for controlling the Godot editor. Claude Code connects to it over stdio. Internally, it opens a WebSocket server on port 6505 and waits for the Godot editor to connect via a companion GDScript plugin. When Claude calls a tool (e.g., `create_scene`, `add_node`, `validate_script`), the server sends a JSON-RPC 2.0 request over WebSocket, the plugin executes it in the editor, and the result comes back.
 
-Tools are organized into 23 **categories**. Four core categories (scene, node, script, editor) are always available. The other 19 are loaded on demand — the agent calls `enable_category` when it needs animation tools, physics tools, etc. Categories auto-unload after 10 minutes of inactivity to keep the tool list manageable.
+Tools are organized into 19 active **categories**. Four core categories (scene, node, script, editor) are always available. The other 15 are loaded on demand — the agent calls `enable_category` when it needs animation tools, physics tools, etc. Categories auto-unload after 10 minutes of inactivity to keep the tool list manageable.
 
 **godot-mcp-docs** provides offline access to the full Godot 4.x documentation — every class, tutorial, and guide. If it is not configured, the agent automatically falls back to **context7** (a cloud-based docs service built into Claude Code).
 
@@ -202,7 +202,7 @@ The installer copies the plugin automatically. You still need to activate it ins
 2. Go to **Project → Project Settings → Plugins**
 3. Find **godot_mcp** and set it to **Enable**
 
-The plugin opens a WebSocket server on port `6505` that `godot-engine-mcp` connects to. Without it, all engine tools (create scene, add node, play scene, etc.) will fail.
+The Node.js MCP server opens a WebSocket listener on port `6505` and the Godot plugin connects back to it. Without the plugin enabled and the editor open, all engine tools (create scene, add node, play scene, etc.) will fail.
 
 ### Step 5 — Verify the installation
 
@@ -210,7 +210,7 @@ Run these checks to confirm everything is working:
 
 ```bash
 # 1. MCP server builds without error
-node /path/to/godot-claude/server/build/index.js --version 2>&1 || echo "Build failed"
+npm --prefix /path/to/godot-claude/server run build
 
 # 2. neural-memory is importable
 python3 -c "import neural_memory; print('neural-memory OK')"
@@ -222,6 +222,15 @@ uvx --from neural-memory-mcp neural-memory --version 2>&1 | head -3
 cd /path/to/your/godot-project
 claude --mcp-debug 2>&1 | grep -E "neural-memory|godot-engine|godot-mcp"
 ```
+
+Repository maintainers can run the static verifier before releasing or after changing tools:
+
+```bash
+./verify.sh          # Linux / macOS
+pwsh verify.ps1     # Windows PowerShell
+```
+
+The verifier checks TypeScript build health, plugin command parity, license metadata, required docs, and whether offline Godot docs have been built.
 
 If any check fails, the most common fixes:
 
@@ -305,7 +314,7 @@ Different tasks benefit from different models. The agent will suggest switching 
 
 ## Tool Categories
 
-The godot-engine-mcp server organizes its 209 tools into 23 categories. Four core categories are always loaded. The remaining 19 are loaded on demand via `enable_category` and automatically unloaded after 10 minutes of inactivity.
+The godot-engine-mcp server organizes its 154 verified plugin-backed tools into 19 active categories. Four core categories are always loaded. The remaining 15 are loaded on demand via `enable_category` and automatically unloaded after 10 minutes of inactivity. TypeScript declarations that do not yet have bundled Godot plugin handlers are hidden by `server/src/utils/pluginSupport.ts` so Claude Code does not receive tools that would fail at runtime.
 
 ### Core categories (always loaded)
 
@@ -313,7 +322,7 @@ The godot-engine-mcp server organizes its 209 tools into 23 categories. Four cor
 |----------|------:|-------------|
 | scene | 10 | Open, save, create, list, and manage scenes |
 | node | 14 | Add, remove, move, inspect, and modify nodes |
-| script | 8 | Create, read, update, and validate GDScript files |
+| script | 7 | Create, read, update, and validate GDScript files |
 | editor | 10 | Editor state, screenshots, play/stop, file system |
 
 ### Extended categories (on-demand)
@@ -321,24 +330,20 @@ The godot-engine-mcp server organizes its 209 tools into 23 categories. Four cor
 | Category | Tools | Description |
 |----------|------:|-------------|
 | animation | 14 | AnimationPlayer and AnimationTree control |
-| audio | 8 | AudioStreamPlayer, buses, effects |
+| audio | 6 | AudioStreamPlayer, buses, effects |
 | batch | 8 | Bulk property and node operations |
-| debugger | 10 | Breakpoints, stack inspection, remote debugging |
-| docs | 6 | In-engine class and method documentation lookup |
-| input | 8 | Input map, actions, and event configuration |
-| localization | 8 | Translation files and locale management |
-| navigation | 6 | NavigationServer, agents, and pathfinding |
-| networking | 8 | Multiplayer, RPC, and network configuration |
-| particles | 6 | CPUParticles and GPUParticles configuration |
-| physics | 8 | Physics bodies, shapes, layers, and raycasting |
-| plugins | 6 | Editor plugin management |
-| profiling | 6 | Performance monitors and frame profiling |
+| docs | 4 | In-engine project analysis and documentation lookup |
+| input | 7 | Input map, actions, and event simulation |
+| navigation | 5 | NavigationServer, agents, and pathfinding |
+| particles | 5 | CPUParticles and GPUParticles configuration |
+| physics | 6 | Physics bodies, shapes, layers, and raycasting |
+| profiling | 2 | Performance monitor inspection |
 | project | 10 | Project settings, autoloads, and exports |
 | rendering | 12 | Viewports, environments, and shader management |
-| resources | 8 | Load, save, inspect, and manage resources |
+| resources | 4 | Load, save, inspect, and manage resources |
 | runtime | 18 | Scene tree manipulation, signals, and game state |
-| tilemap | 8 | TileMap and TileSet editing |
-| ui | 9 | Control nodes, themes, and layout management |
+| tilemap | 6 | TileMap and TileSet editing |
+| ui | 6 | Control nodes, themes, and layout management |
 
 ### Meta-tools (4)
 
@@ -349,7 +354,7 @@ The godot-engine-mcp server organizes its 209 tools into 23 categories. Four cor
 | `disable_category` | Unload a non-core category to free context |
 | `server_status` | Connection state, loaded categories, port, version |
 
-**Total: 209 category tools + 4 meta-tools = 213 registered tools**
+**Total: 154 category tools + 4 meta-tools = 158 registered tools**
 
 ---
 
@@ -361,7 +366,7 @@ godot-claude uses four MCP servers, configured in `.mcp.json`:
 
 The primary engine control server. Written in TypeScript, bundled in `server/`. Communicates with the Godot editor over WebSocket on port 6505.
 
-- 209 tools across 23 categories
+- 154 verified tools across 19 active categories
 - Requires the Godot editor to be running with the companion plugin enabled
 - Built automatically by the installer
 
@@ -449,6 +454,7 @@ godot-claude/
 ├── CLAUDE.md                # Agent instructions (copied to .godot-claude/)
 ├── install.sh               # Linux/macOS installer
 ├── install.ps1              # Windows PowerShell installer
+├── verify.sh / verify.ps1   # Static MCP/plugin/docs/license verifier
 ├── server/                  # godot-engine-mcp — TypeScript MCP server
 │   ├── package.json
 │   ├── tsconfig.json
@@ -456,12 +462,12 @@ godot-claude/
 │   │   ├── index.ts         # Server entry point
 │   │   ├── connection.ts    # WebSocket connection to Godot
 │   │   ├── registry.ts      # Category registration and lifecycle
-│   │   ├── categories/      # 23 tool category definitions
+│   │   ├── categories/      # Tool category definitions
 │   │   │   ├── scene.ts
 │   │   │   ├── node.ts
 │   │   │   ├── script.ts
 │   │   │   ├── editor.ts
-│   │   │   └── ... (19 more)
+│   │   │   └── ... (additional on-demand categories)
 │   │   └── utils/           # Shared types, validation, errors
 │   └── build/               # Compiled output (generated)
 ├── docs-server/             # godot-mcp-docs — Python MCP server
@@ -483,10 +489,14 @@ godot-claude/
 
 ## Credits
 
+godot-claude is developed by Yakoub-ai. Redistributed projects, public demos, videos, repositories, and distributed games that materially use this software must include the credit: **Built with Yakoub-ai**.
+
 The game generation pipeline (godogen) is adapted from [godogen](https://github.com/user/godogen), a standalone Claude Code skills system for autonomous game generation. The pipeline architecture — visual targeting, task decomposition, scaffold generation, asset planning, and visual QA — originates from that project.
 
 ---
 
 ## License
 
-MIT
+godot-claude is source-available for noncommercial use under the [Godot Claude Noncommercial Source License](LICENSE). Resale, paid redistribution, commercial hosting, paid marketplace listing, and use in commercial products or services require separate written permission from Yakoub-ai.
+
+Required credit for public or redistributed work: **Built with Yakoub-ai**.

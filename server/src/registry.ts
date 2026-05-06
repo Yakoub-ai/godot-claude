@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { GodotConnection } from "./connection.js";
 import { formatErrorForMcp } from "./utils/errors.js";
+import { isPluginSupportedMethod } from "./utils/pluginSupport.js";
 
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -47,12 +48,24 @@ export class CategoryRegistry {
   }
 
   register(def: CategoryDef, core = false): void {
-    this.categories.set(def.name, def);
-    if (core) {
-      this.coreCategories.add(def.name);
+    const supportedDef: CategoryDef = {
+      ...def,
+      tools: def.tools.filter((tool) => isPluginSupportedMethod(tool.name)),
+    };
+
+    if (supportedDef.tools.length === 0 && !core) {
+      console.error(
+        `[godot-engine-mcp] Skipping category '${def.name}' because the bundled Godot plugin has no supported handlers for it`
+      );
+      return;
     }
-    for (const tool of def.tools) {
-      this.toolToCategory.set(tool.name, def.name);
+
+    this.categories.set(supportedDef.name, supportedDef);
+    if (core) {
+      this.coreCategories.add(supportedDef.name);
+    }
+    for (const tool of supportedDef.tools) {
+      this.toolToCategory.set(tool.name, supportedDef.name);
     }
   }
 
@@ -75,6 +88,15 @@ export class CategoryRegistry {
         tool.schema,
         async (params) => {
           this.resetIdleTimer(name);
+          if (!this.loaded.has(name)) {
+            return {
+              content: [{
+                type: "text" as const,
+                text: `Category '${name}' is disabled. Call enable_category with category='${name}' before using ${tool.name}.`,
+              }],
+              isError: true,
+            };
+          }
           try {
             return await tool.handler(params as Record<string, unknown>, godot);
           } catch (e) {

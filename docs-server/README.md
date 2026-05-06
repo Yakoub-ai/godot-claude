@@ -12,10 +12,10 @@ MCP server that serves the complete official Godot 4.x documentation for AI assi
 
 ```bash
 cd docs-server
-pip install -r requirements.txt   # or: uv pip install -e .
-sudo apt install pandoc            # or: brew install pandoc
+uv pip install -e .        # or install dependencies from pyproject.toml
+sudo apt install pandoc    # or: brew install pandoc / winget install pandoc
 python3 docs_converter/godot_docs_converter.py
-tree docs/. > docs/docs_tree.txt
+find docs -type f | sort > docs/docs_tree.txt
 ```
 
 ## Run
@@ -37,3 +37,9 @@ python3 main.py
 - pandoc (system package)
 - fastmcp >= 2.10.6
 - pypandoc >= 1.15
+
+## License
+
+This server is part of godot-claude and is distributed under the repository root
+noncommercial source license. Resale is prohibited. Required credit: **Built
+with Yakoub-ai**.
