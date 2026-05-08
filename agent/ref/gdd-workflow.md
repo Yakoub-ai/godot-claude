@@ -31,6 +31,20 @@ Auto-set from answers:
 | HD 2D | 1920x1080 | canvas_items | Linear |
 | 3D | 1920x1080 | canvas_items | Linear |
 
+**If art style is 3D, also ask:**
+1. **Camera mode** — first-person / third-person (over-shoulder) / fixed orbital / top-down 3D / isometric 3D
+2. **Renderer** — Forward+ (shadows, SSR, SSAO, volumetric fog — desktop only) / Mobile (reduced effects — mobile/web) / Compatibility (OpenGL ES — widest support)
+3. **Physics engine** — Jolt Physics (recommended: faster, more stable) / Godot Physics (built-in default)
+4. **Navigation** — Static NavigationMesh3D (pre-baked, most levels) / Dynamic obstacles (enemies that block paths) / None
+
+Auto-set for 3D:
+| Camera Mode | Suggested FOV | Notes |
+|-------------|--------------|-------|
+| First-person | 75° | Lock cursor; CharacterBody3D root |
+| Third-person | 60-70° | SpringArm3D rig to avoid clipping |
+| Fixed orbital | 45-60° | Good for strategy/puzzle |
+| Top-down 3D | 50° | Orthographic optional |
+
 ### Stage 3: Entities & Characters
 Ask:
 1. Playable characters (count, names, abilities)
@@ -46,6 +60,19 @@ Ask:
 2. Level structure (linear / hub-world / procedural)
 3. Biomes/themes?
 4. Scene hierarchy (which scenes contain which)
+
+**If 3D, also ask:**
+1. **Level geometry** — CSG primitives (fast prototyping) / imported GLB environments / GridMap (modular tiles) / terrain heightmap
+2. **Skybox** — procedural sky (free, customizable) / HDRI panorama / solid color
+3. **Lighting** — DirectionalLight3D sun + ambient / baked GI (LightmapGI for static levels) / dynamic only
+4. **Prototype strategy** — use CSG boxes first, replace with final assets later (recommended) / final assets from the start
+
+Auto-set for 3D levels:
+| Level Type | Geometry | Lighting |
+|------------|----------|---------|
+| Interior | CSG or GLB rooms | Baked GI + OmniLight3D |
+| Outdoor | Terrain + GLB props | DirectionalLight3D + ProceduralSky |
+| Abstract/arcade | CSG primitives | Dynamic only |
 
 ### Stage 5: Core Systems
 Ask:
@@ -64,11 +91,15 @@ Auto-generate based on genre:
 | Top-down RPG | move_up/down/left/right, interact, menu, attack |
 
 ### Stage 7: Asset Plan
-Compile from entity specs. Plan specific PixelLab generations with prompt templates:
+
+Asset provider depends on art style chosen in Stage 1:
+
+**Pixel art projects → PixelLab MCP**
+Plan specific generations per entity. See `.godot-claude/ref/pixellab.md` for all tool signatures.
 
 For each character:
 - `create_character` with art-directed description (palette, density, style era)
-- List animations to generate via `animate_character`
+- List animations to generate via `animate_character` (idle, walk, attack, death minimum)
 
 For each tileset:
 - `create_sidescroller_tileset` or `create_topdown_tileset`
@@ -77,6 +108,12 @@ For each tileset:
 For props and backgrounds:
 - `create_map_object` with dimensions matching the viewport scale
 - Backgrounds: specify parallax layer count, mood, time of day
+
+**HD 2D projects → Gemini (asset_gen.py)**
+Plan sprite sheets (16-frame 4×4 grid per character), background images (2K 16:9), and UI textures. Prompts use art direction from `ASSETS.md`.
+
+**3D projects → Gemini + Tripo3D (asset_gen.py)**
+Plan reference images per model (3/4 front elevated angle, white bg), then GLB conversion. Plan environment textures for ground, walls, skybox. Budget: ~37c per 3D asset (7c image + 30c GLB at medium quality).
 
 ### Stage 8: Performance Budget
 Set targets based on scope:
@@ -183,7 +220,28 @@ Phase plan from Stage 9 with acceptance criteria.
 
 ## After GDD — Enter Build Pipeline
 
-Once all documents are generated:
+Once all documents are generated, tell the user:
+
+> **Planning complete!**
+> - `PLAN.md` — game design document
+> - `STRUCTURE.md` — architecture
+> - `ASSETS.md` — asset manifest
+> - `ROADMAP.md` — phase plan
+>
+> Ready to build? Say **"generate game"** and I'll build it autonomously from these plans.
+> Or say **"begin Phase 1"** to step through it together.
+
+Then wait for the user's response before proceeding.
+
+**If user says "generate game" / "build it" / "go autonomous":**
+Invoke `Skill(skill="godogen")` — godogen will detect the existing `PLAN.md` and skip brainstorming, going straight to execution.
+
+**If user says "begin Phase 1" / "let's start" / wants collaborative mode:**
+Work phase-by-phase manually, running `Skill(skill="godot-task")` per task and pausing for review between phases.
+
+---
+
+**(Background steps — run regardless of mode):**
 
 1. **Record to neural-memory:**
    - Run `neural_index` to auto-index the new project scaffold
@@ -193,13 +251,6 @@ Once all documents are generated:
    - Set project settings (viewport, stretch, filter)
    - Create folder structure from STRUCTURE.md
    - Set up input map from Stage 6
-
-3. **Begin Phase 1** — start building immediately:
-   - Read ROADMAP.md Phase 1 acceptance criteria
-   - Generate required assets from ASSETS.md (PixelLab)
-   - Implement scenes and scripts
-   - Validate and test
-   - Run `neural_update` to re-index completed work
 
 ---
 

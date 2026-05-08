@@ -10,9 +10,19 @@ The caller provides:
 
 The game description is in `PLAN.md` under **Game Description**.
 
-## Setup
+## Asset Provider Routing
 
-Read `${CLAUDE_SKILL_DIR}/asset-gen.md` for CLI reference and prompt templates.
+Choose the provider based on art style, determined from `PLAN.md` or `reference.png`:
+
+| Art Style | Provider | Tools |
+|-----------|----------|-------|
+| **Pixel art** (any camera) | PixelLab MCP | `create_character`, `animate_character`, `create_sidescroller_tileset`, `create_topdown_tileset`, `create_map_object` — see `.godot-claude/ref/pixellab.md` |
+| **HD 2D** (non-pixel 2D) | Gemini via `asset_gen.py` | `image`, `spritesheet` subcommands |
+| **3D** (any style) | Gemini + Tripo3D via `asset_gen.py` | `image` for references, `glb` for models |
+
+**Pixel art projects:** skip `asset-gen.md` entirely — use only PixelLab MCP tools. Generate characters, tilesets, and props via the async PixelLab pipeline. See `.godot-claude/ref/pixellab.md` for workflow (create → poll → download → integrate).
+
+**HD 2D and 3D projects:** Read `${CLAUDE_SKILL_DIR}/asset-gen.md` for CLI reference and prompt templates.
 
 ## Workflow
 

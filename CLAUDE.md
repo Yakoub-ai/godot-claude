@@ -91,6 +91,7 @@ These files live in `.godot-claude/` inside the user's project. **Never load mor
 | `.godot-claude/ref/pixellab.md` | PixelLab asset generation pipeline | When creating art assets |
 | `.godot-claude/ref/gdd-workflow.md` | Interactive game creation stages | When user says "start new game" or asks for GDD |
 | `.godot-claude/ref/docs-index.md` | Godot docs MCP path patterns | When looking up Godot documentation |
+| `.godot-claude/ref/narrative-workflow.md` | Dialog, quests, cutscenes, lore bible | When building story-driven games, RPGs, visual novels |
 
 ### Skills (Loaded via Skill tool)
 | Skill | Purpose | When to Use |
@@ -227,13 +228,15 @@ When returning to a project after time away:
 **Commands:** "generate game", "make a game", "build a game", "godogen" → triggers the godogen orchestrator skill
 
 ### For New Projects
-1. GDD workflow -> Visual Target & Reference anchoring (Gemini)
-2. Task Decomposer -> Generates PLAN.md
-3. Scaffold -> Architecture design (STRUCTURE.md) and skeleton
-4. Asset Planner/Generator -> Pixel art (PixelLab) or 2D/3D assets (Gemini / Tripo3D)
-5. Runtime scripts & Scene builders implement logic
-6. Visual QA verifies each task via screenshots (Gemini Flash vision)
-7. Each task tracked as GSD phase
+1. GDD workflow (`start new game`) → interactive 9-stage design → produces PLAN.md, STRUCTURE.md, ASSETS.md, ROADMAP.md
+2. *(Optional)* Narrative workflow (`design story`) → adds LORE.md, STORY.md, QUESTS.md, CUTSCENES.md and inserts narrative tasks into PLAN.md
+3. `generate game` → godogen picks up existing planning docs, skips brainstorming, goes autonomous:
+   - Visual Target & Reference anchoring (Gemini)
+   - Task Decomposer → PLAN.md (or reads existing)
+   - Scaffold → STRUCTURE.md + MEMORY.md + project skeleton
+   - Asset Planner → routes by art style (PixelLab for pixel art; Gemini/Tripo3D for HD 2D and 3D)
+   - Task loop: godot-task per task → screenshot → VQA → commit
+   - Presentation video as final task
 
 ### For Existing Projects
 1. "add [feature]" or "update [system]" → reads project state via neural-memory + MCP
@@ -247,12 +250,18 @@ When returning to a project after time away:
 | `godogen` | Orchestrate full game pipeline | "make a game", "generate game" |
 | `godot-task` | Execute single development task | Called by godogen per task |
 
+### Narrative Trigger
+Load `.godot-claude/ref/narrative-workflow.md` when:
+- User says "design story", "add narrative", "add dialog", "add quests", "add cutscenes"
+- Game genre is RPG, visual novel, adventure, or story-driven platformer
+- GDD Stage 3 reveals significant NPCs with distinct roles
+
 ### Asset Pipeline
-Assets can be generated via multiple providers:
+Assets are routed by art style (detected from PLAN.md / reference.png):
 - **Pixel art:** PixelLab MCP (`create_character`, `create_sidescroller_tileset`, etc.)
-- **2D/General textures:** Gemini via Godogen Asset Generator
-- **3D Models:** Tripo3D API conversion (via Godogen)
-- **Equipment Compositing:** LPC Spritesheet Compositor (`agent/tools/lpc_spritesheet.py`)
+- **HD 2D / general 2D:** Gemini via `asset_gen.py` (`image`, `spritesheet` subcommands)
+- **3D models:** Gemini reference image → Tripo3D GLB (`image` + `glb` subcommands)
+- **Equipment compositing:** LPC Spritesheet Compositor (`agent/tools/lpc_spritesheet.py`)
 
 ---
 
@@ -272,15 +281,29 @@ Assets can be generated via multiple providers:
 ## Quick Start Commands
 
 Tell the user about these on first interaction:
-- **"start new game"** → GDD workflow → neural-memory index + GSD phases
+
+### Two-Step Workflow (Brainstorm → Build)
+1. **"start new game"** → Interactive GDD (9 stages) → produces PLAN.md, STRUCTURE.md, ASSETS.md, ROADMAP.md. Then prompts: *"Ready to build? Say 'generate game'."*
+2. **"generate game"** (after GDD) → godogen reads existing docs, skips brainstorming, builds autonomously
+
+### Direct Commands
+- **"make a game"** → godogen with inline brainstorming → fastest path to a running game
+- **"add [feature]"** → incremental godogen → adds feature to existing project
+- **"start new game"** → GDD brainstorm → planning documents only (no code yet)
+
+### Narrative / Story Games
+- **"design story"** or **"add narrative"** → narrative-workflow → dialog trees, quests, lore bible, cutscenes
+- Can be run standalone or combined with GDD Stage 3b for narrative-heavy games
+
+### Session Management
 - **"continue"** → Read last session + neural-memory context, resume current phase
 - **"status"** → `neural_query("project status")` + GSD progress
 - **"next phase"** → Check GSD roadmap, plan and begin next phase
 - **"what's done"** → `neural_query("completed features and systems")`
+
+### Debugging & Optimization
 - **"optimize"** → Runs performance profiling workflow
 - **"fix errors"** → Enters error detection and fixing loop
-- **"make a game"** or **"generate game"** → godogen pipeline → full autonomous game generation
-- **"add [feature]"** → incremental godogen → adds feature to existing project
 
 ---
 
