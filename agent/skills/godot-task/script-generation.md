@@ -53,6 +53,22 @@ func _physics_process(delta: float) -> void:
     engine_force = fwd * max_engine_force * clampf(5.0 / maxf(spd, 0.1), 0.5, 5.0)
 ```
 
+## Narrative Scripts
+
+For dialog, quests, and cutscenes — see full patterns in `.godot-claude/ref/scene-architecture.md` under "Narrative Architecture". Key scripts:
+
+**NarrativeManager (Autoload)** — all story state (quests, flags, choices). Never store narrative state in scene scripts.
+
+**DialogBox** — typewriter dialog UI. Pauses tree during dialog. Triggered by NPC on `interact` input.
+
+**QuestTracker UI** — subscribes to NarrativeManager signals, rebuilds on change.
+
+**CutsceneDirector** — plays AnimationPlayer timelines, swaps cameras, handles Skip (Escape).
+
+**Third-party dialog plugins** (preferred for complex games):
+- Dialogic 2: install via AssetLib → `plugin.cfg` → enable → place `DialogicGameHandler` autoload
+- DialogueManager: install via AssetLib → use `.dialogue` script files → `DialogueManager.show_dialogue_balloon(resource, title)`
+
 ## Script Constraints
 
 - `extends` MUST match the node type this script attaches to

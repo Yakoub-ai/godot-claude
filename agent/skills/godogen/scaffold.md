@@ -16,10 +16,28 @@ Works for both fresh projects and incremental changes (adding scenes/scripts, re
 5. **Write/update `project.godot`** — create or merge input mappings.
 6. **Write `STRUCTURE.md`** — always the complete architecture, not a diff.
 7. **Write script stubs** — for new scripts and any existing scripts the task explicitly asks to replace.
+   After writing stubs, also append key architecture decisions to `MEMORY.md` under `## Architecture` — renderer, dimension (2D/3D), main scene path, key autoloads, and any non-obvious structural choices.
 8. **Import assets** — `timeout 60 godot --headless --import 2>&1`. Ensures all assets (`.glb`, `.png`, etc.) are imported before scene builders reference them.
 9. **Build scene stubs** — for each new/changed scene, write a scene builder script to `scenes/build_{name}.gd` using the template below, then run in dependency order (leaf scenes first): `timeout 60 godot --headless --script scenes/build_{name}.gd`
 10. **Verify** — `timeout 60 godot --headless --quit 2>&1`. No `ERROR` or `Parser Error` lines. RID warnings are benign.
-11. **Git commit** — repo is already initialized before Claude Code starts:
+11. **Initialize `MEMORY.md`** — create this file before git commit. Tasks read and write it to share discoveries across the pipeline.
+    ```bash
+    cat > MEMORY.md << 'EOF'
+    # Project Memory
+    
+    Discoveries, workarounds, and decisions logged by each task. Read before starting any task; append after completing.
+    
+    ## Architecture
+    
+    <!-- Filled in by scaffold -->
+    
+    ## Per-Task Notes
+    
+    <!-- Each task appends: ## Task N: {name} -->
+    EOF
+    ```
+
+12. **Git commit** — repo is already initialized before Claude Code starts:
     ```bash
     git add -A && git commit -m "scaffold: project skeleton"
     ```
