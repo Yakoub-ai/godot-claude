@@ -1,0 +1,10 @@
+{
+  "name": "godot-claude",
+  "version": "2.0.0",
+  "description": "Build 2D and 3D games in Godot 4.4+ with Claude: headless MCP tools (check, scene editing, version-exact API docs, tests, deterministic playtesting with screenshots), game-dev workflow skills, and review/playtest agents.",
+  "author": { "name": "Yakoub-ai" },
+  "homepage": "https://github.com/Yakoub-ai/godot-claude",
+  "repository": "https://github.com/Yakoub-ai/godot-claude",
+  "license": "MIT",
+  "keywords": ["godot", "gamedev", "gdscript", "mcp", "playtesting", "game-design"]
+}

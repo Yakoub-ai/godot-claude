@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Godot ${{ matrix.godot }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        godot: ["4.4.1", "4.5.2", "4.6.3", "4.7.2"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install Godot ${{ matrix.godot }} and Xvfb
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1 >/dev/null
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${{ matrix.godot }}-stable/Godot_v${{ matrix.godot }}-stable_linux.x86_64.zip"
+          unzip -q godot.zip -d "$RUNNER_TEMP/godot" && rm godot.zip
+          echo "GODOT_BIN=$RUNNER_TEMP/godot/Godot_v${{ matrix.godot }}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Build server
+        working-directory: server
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Bundled server is up to date
+        run: git diff --exit-code -- server/dist || (echo "server/dist is stale: run 'npm run build' in server/ and commit" && exit 1)
+
+      - name: GDScript tools compile under strict warnings
+        run: tests/check_strict.sh
+
+      - name: Integration tests
+        working-directory: server
+        run: npm test

@@ -1,22 +1,10 @@
-# OS
 .DS_Store
 Thumbs.db
-# Windows/WSL Zone.Identifier metadata files
 *Zone.Identifier
-*:Zone.Identifier
-
-# IDE
 .vscode/
 .idea/
-
-# Note: agent/memory/ and agent/session/ ARE included in the repo
-# (they contain blank templates). The installer's .gitignore addition
-# only ignores .godot-claude/memory/ and .godot-claude/session/ in the
-# user's Godot project (where actual data accumulates).
-
-# Planning documents (local)
-docs/plans/
-.claude/
-.neural-memory/
+node_modules/
+server/build/
 *.log
-/.remember
+.godot/
+tests/fixtures/**/.godot/

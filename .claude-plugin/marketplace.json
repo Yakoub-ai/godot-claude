@@ -1,0 +1,11 @@
+{
+  "name": "godot-claude",
+  "owner": { "name": "Yakoub-ai" },
+  "plugins": [
+    {
+      "name": "godot-claude",
+      "source": "./",
+      "description": "Godot 4.4+ game development: MCP tools, workflow skills, playtest and review agents."
+    }
+  ]
+}

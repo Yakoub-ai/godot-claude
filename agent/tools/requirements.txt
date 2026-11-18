@@ -1,6 +1,0 @@
-numpy
-pillow
-scipy
-rembg
-pymatting
-onnxruntime
