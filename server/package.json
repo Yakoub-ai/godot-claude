@@ -1,24 +1,25 @@
 {
-  "name": "godot-engine-mcp",
-  "version": "1.0.0",
-  "description": "MCP server for Godot 4.x engine control",
-  "license": "SEE LICENSE IN ../LICENSE",
+  "name": "godot-claude-mcp",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Headless-first MCP server for Godot 4.4+: check, scene editing, API docs, tests and playtesting.",
+  "license": "MIT",
   "type": "module",
-  "main": "build/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch",
-    "start": "node build/index.js",
-    "lint": "eslint src/"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/godot-mcp.mjs --legal-comments=inline --banner:js=\"// godot-claude MCP server (bundled). Source: server/src. Rebuild: npm run build\"",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "ws": "^8.21.3",
-    "zod": "^3.24.0"
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@types/ws": "^8.5.13",
-    "typescript": "^5.7.0"
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
   }
 }

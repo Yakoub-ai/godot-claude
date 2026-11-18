@@ -1,8 +1,0 @@
-{
-  "name": "godot-claude",
-  "description": "Godot game development agent with MCP integration",
-  "skills": [
-    "skills/godogen/SKILL.md",
-    "skills/godot-task/SKILL.md"
-  ]
-}
